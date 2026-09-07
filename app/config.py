@@ -1,0 +1,34 @@
+"""Environment loading. Every setting the app reads comes from here."""
+
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+ROOT = Path(__file__).resolve().parent.parent
+# Real environment variables win over .env, so tests and evals can override anything.
+load_dotenv(ROOT / ".env", override=False)
+
+
+def _get(name: str, default: str = "") -> str:
+    return os.environ.get(name, default).strip()
+
+
+DATABASE_URL = _get("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/clearance")
+
+LLM_BASE_URL = _get("LLM_BASE_URL")
+LLM_API_KEY = _get("LLM_API_KEY")
+LLM_MODEL = _get("LLM_MODEL")
+
+GITLAB_URL = _get("GITLAB_URL", "https://gitlab.com")
+GITLAB_TOKEN = _get("GITLAB_TOKEN")
+GITLAB_PROJECT_ID = _get("GITLAB_PROJECT_ID")
+GITLAB_DRY_RUN = _get("GITLAB_DRY_RUN", "1") != "0"
+
+SLACK_BOT_TOKEN = _get("SLACK_BOT_TOKEN")
+SLACK_APP_TOKEN = _get("SLACK_APP_TOKEN")
+DEMO_EMPLOYEE_EMAIL = _get("DEMO_EMPLOYEE_EMAIL")
+
+HANDBOOK_DIR = ROOT / "data" / "handbook"
+INDEX_DIR = Path(_get("INDEX_DIR", str(ROOT / "data" / "index")))
+TEMPLATE_PATH = ROOT / "templates" / "access_request.md"
