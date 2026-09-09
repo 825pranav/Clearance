@@ -1,0 +1,19 @@
+# Candidate models for phase 5b. Each entry: name, base_url, model, api_key_env.
+# Local entries are tool-capable models already pulled into Ollama on the owner's laptop (6 GB GPU).
+# Not listed: gemma4:12b (7.6 GB, does not fit in 6 GB VRAM) and pd-qwen2.5-7b-12k (same weights as qwen2.5:7b).
+- name: qwen3-4b
+  base_url: http://localhost:11434/v1
+  model: qwen3:4b
+  api_key_env: LLM_API_KEY
+- name: llama3.2-3b
+  base_url: http://localhost:11434/v1
+  model: llama3.2:latest
+  api_key_env: LLM_API_KEY
+- name: qwen2.5-7b
+  base_url: http://localhost:11434/v1
+  model: qwen2.5:7b
+  api_key_env: LLM_API_KEY
+- name: qwen3-8b
+  base_url: http://localhost:11434/v1
+  model: qwen3:8b
+  api_key_env: LLM_API_KEY

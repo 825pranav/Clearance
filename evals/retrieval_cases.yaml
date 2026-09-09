@@ -1,0 +1,31 @@
+# Retrieval eval: 15 questions, each with the handbook file that should appear in the top 3 results.
+- question: "Who owns the production AWS account?"
+  expected: aws-production.md
+- question: "What can I do with write access to the GCP sandbox?"
+  expected: gcp-sandbox.md
+- question: "What justification is expected for data warehouse access?"
+  expected: snowflake.md
+- question: "Can I edit dashboards if I only have read access in Tableau?"
+  expected: tableau.md
+- question: "What does admin access in Figma allow?"
+  expected: figma.md
+- question: "What can I see in the CRM with read access?"
+  expected: salesforce.md
+- question: "What can support agents do in the helpdesk?"
+  expected: zendesk.md
+- question: "Who approves changes to SSO configuration?"
+  expected: okta-admin.md
+- question: "Which access level can rotate service account keys in Google Cloud production?"
+  expected: gcp-production.md
+- question: "How many approvals does a high risk request need?"
+  expected: access-request-process.md
+- question: "Should I ask for admin just in case I need it later?"
+  expected: least-privilege.md
+- question: "Can I spin up test EC2 instances without touching customer systems?"
+  expected: aws-sandbox.md
+- question: "What happens after I submit an access request?"
+  expected: access-request-process.md
+- question: "Why should I request the lowest access level?"
+  expected: least-privilege.md
+- question: "Is customer PII stored in the data warehouse?"
+  expected: snowflake.md

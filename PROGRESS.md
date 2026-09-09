@@ -23,3 +23,9 @@ Env vars set at the start: `DATABASE_URL`, `LLM_BASE_URL`, `LLM_API_KEY`, `GITLA
 
 - Gate: `make up` → container healthy; `python -m app.db ping` → `ok`; `pytest -q` → `2 passed`.
 - Result: **pass**
+
+## Phase 1: Data and frozen evals
+
+- Built: `app/schema.sql` (5 tables), `data/seed.sql` (12 employees, 10 systems, 7 baselines), 12 handbook docs, `evals/cases.yaml` (30), `evals/adversarial.yaml` (12), `evals/retrieval_cases.yaml` (15), `evals/models.yaml`.
+- Gate: `make seed` → `seeded`; `pytest tests/test_seed_integrity.py` → `8 passed`.
+- Result: **pass**. The eval files are frozen from this point.
