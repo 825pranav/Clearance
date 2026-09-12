@@ -29,3 +29,9 @@ Env vars set at the start: `DATABASE_URL`, `LLM_BASE_URL`, `LLM_API_KEY`, `GITLA
 - Built: `app/schema.sql` (5 tables), `data/seed.sql` (12 employees, 10 systems, 7 baselines), 12 handbook docs, `evals/cases.yaml` (30), `evals/adversarial.yaml` (12), `evals/retrieval_cases.yaml` (15), `evals/models.yaml`.
 - Gate: `make seed` → `seeded`; `pytest tests/test_seed_integrity.py` → `8 passed`.
 - Result: **pass**. The eval files are frozen from this point.
+
+## Phase 2: Policy core
+
+- Built: `app/policy.py` (`level_rank`, `covers`, `effective_risk`, `required_approvers`, `validate_justification`, `existing_access`) and the catalogue/request/audit queries in `app/db.py`.
+- Gate: `pytest tests/test_policy.py` → `31 passed` (each risk tier, admin override, self-approval, the 7/8-word boundary, level ordering, all four `existing_access` results, plus a check that every filed eval expectation follows from the rules).
+- Result: **pass**
