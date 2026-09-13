@@ -35,3 +35,9 @@ Env vars set at the start: `DATABASE_URL`, `LLM_BASE_URL`, `LLM_API_KEY`, `GITLA
 - Built: `app/policy.py` (`level_rank`, `covers`, `effective_risk`, `required_approvers`, `validate_justification`, `existing_access`) and the catalogue/request/audit queries in `app/db.py`.
 - Gate: `pytest tests/test_policy.py` → `31 passed` (each risk tier, admin override, self-approval, the 7/8-word boundary, level ordering, all four `existing_access` results, plus a check that every filed eval expectation follows from the rules).
 - Result: **pass**
+
+## Phase 3: Retrieval
+
+- Built: `app/retrieval.py`: chunk by `##` heading (61 chunks), embed with fastembed `BAAI/bge-small-en-v1.5` (local ONNX, ~67 MB download on first run), `VectorStore` (`add`, `search`, `save`, `load`) on a normalised NumPy matrix, persisted to `data/index/` by `make index`.
+- Gate: retrieval eval **15/15** expected files in the top 3 (gate: 13/15). `tests/test_retrieval.py` → `5 passed`.
+- Result: **pass**
