@@ -41,3 +41,18 @@ Env vars set at the start: `DATABASE_URL`, `LLM_BASE_URL`, `LLM_API_KEY`, `GITLA
 - Built: `app/retrieval.py`: chunk by `##` heading (61 chunks), embed with fastembed `BAAI/bge-small-en-v1.5` (local ONNX, ~67 MB download on first run), `VectorStore` (`add`, `search`, `save`, `load`) on a normalised NumPy matrix, persisted to `data/index/` by `make index`.
 - Gate: retrieval eval **15/15** expected files in the top 3 (gate: 13/15). `tests/test_retrieval.py` → `5 passed`.
 - Result: **pass**
+
+## Phase 4: GitLab client, tools, MCP server
+
+- Built: `app/gitlab_client.py` (`DryRunGitLab` and `GitLabClient`, same five methods), `app/tools.py` (four tools, structured errors, a `tool_called` audit row per call), `templates/access_request.md`, `app/mcp_server.py` (MCP 2.x `MCPServer` over stdio).
+- Gate: `pytest tests/test_tools.py` → `12 passed`: valid request (row, audit rows, issue with every section and the three labels), baseline refused, pending duplicate refused, short high-risk justification → `justification_required`, high risk → two distinct approvers, MCP stdio server lists exactly four tools and `search_handbook` returns results.
+- Real GitLab smoke test: **skipped**, no `GITLAB_TOKEN`/`GITLAB_PROJECT_ID`. Steps are in `HANDOFF.md`.
+- Result: **pass**
+
+## Direction check A
+
+1. **The system in six sentences.** An employee writes to a Slack bot in plain English. The bot looks up who they are and passes the message to an agent loop that gives an LLM four tools served over MCP. The LLM works out which system and access level is meant, checks existing access, searches the handbook, and asks a follow-up question when something is missing. When it calls `create_access_request`, Python code recomputes everything that matters (existing access, risk tier, approvers, justification rule) and files a GitLab issue from a template. A sync job polls the issue's labels and moves the request through its statuses, notifying the requester. A Streamlit page shows requests, the audit trail and eval scores.
+2. **Is any policy decision reachable by the LLM other than through `create_access_request` inputs?** No. The tools take only `system_key`, `access_level`, `justification` and `query`; risk, approvers, status and the duplicate check are computed in `policy.py` and `tools.py`. `employee_email` and `conversation_id` are session parameters that the agent strips from the schemas and fills in itself (implemented in phase 5).
+3. **Code the spec did not ask for?** Two small helpers: `resolve_system` accepts a display name or alias as well as the key (removes a whole class of "unknown system" round trips with small models), and `check_existing_access` also reports the risk tier and whether a justification will be needed, so the model knows whether to ask for one. Both are part of existing tools, not new features. Nothing removed.
+4. **Lines of Python outside `tests/` and `evals/`:** 653.
+5. **`make test`:** `58 passed`. All earlier gates are still green.

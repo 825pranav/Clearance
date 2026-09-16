@@ -101,6 +101,14 @@ def insert_request(employee_email: str, system_key: str, access_level: str, just
     return row["id"]
 
 
+def set_request_issue(request_id: int, iid: int, url: str) -> None:
+    with connect() as conn:
+        conn.execute(
+            "UPDATE requests SET gitlab_issue_iid = %s, gitlab_issue_url = %s, updated_at = now() WHERE id = %s",
+            (iid, url, request_id),
+        )
+
+
 def audit(event: str, actor: str, detail: dict | None = None, conversation_id: str | None = None,
           request_id: int | None = None) -> None:
     with connect() as conn:
