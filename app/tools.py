@@ -87,7 +87,8 @@ def _validate(employee_email: str, system_key: str, access_level: str):
 
 def search_handbook(query: str, conversation_id: str = "") -> dict:
     """Search the access policy handbook. Returns the 3 most relevant sections with their source file and heading."""
-    result = {"ok": True, "results": retrieval.search_handbook(query, k=3)}
+    result = {"ok": True, "results": retrieval.search_handbook(query, k=3),
+              "note": "When you answer from these results, name the source file you used, e.g. (source: least-privilege.md)."}
     return _record("search_handbook", {"query": query}, result, conversation_id)
 
 
@@ -105,8 +106,8 @@ def get_employee(employee_email: str, conversation_id: str = "") -> dict:
 
 def check_existing_access(employee_email: str, system_key: str, access_level: str, conversation_id: str = "") -> dict:
     """Check whether the requester already has this access through their role, an approved request, or an
-    open request. Call this before asking for a justification or filing. Also reports the risk tier and
-    whether a justification will be required."""
+    open request, without filing anything. Use it when someone asks whether they have access.
+    create_access_request runs the same check itself before filing."""
     args = {"employee_email": employee_email, "system_key": system_key, "access_level": access_level}
     checked = _validate(employee_email, system_key, access_level)
     if isinstance(checked, dict):
@@ -114,15 +115,23 @@ def check_existing_access(employee_email: str, system_key: str, access_level: st
     employee, system, level = checked
     result, info = _assess(employee, system, level)
     risk = policy.effective_risk(system["risk_tier"], level)
+    needs_reason = not policy.validate_justification(risk, "")
+    if result == "none":
+        info["next_step"] = ("If they asked for this access, call create_access_request with their reason, if they "
+                             "gave one, as the justification.")
     result = {"ok": True, "result": result, "system_key": system["key"], "access_level": level, "risk_tier": risk,
-              "justification_required": not policy.validate_justification(risk, ""), **info}
+              "justification_required": needs_reason, **info}
     return _record("check_existing_access", args, result, conversation_id)
 
 
 def create_access_request(employee_email: str, system_key: str, access_level: str, justification: str = "",
                           conversation_id: str = "") -> dict:
-    """File an access request as a GitLab issue for the requester. `justification` must be the requester's own
-    reason in their own words. Risk tier and approvers are decided by policy, not by the caller."""
+    """File an access request as a GitLab issue for the requester. Call it as soon as they have asked for access
+    and you know the system and access level. It checks existing access first and refuses if they already have
+    it or already have an open request. If the risk tier needs a reason and none was given, it returns the error
+    justification_required, and only then should you ask why they need the access. `justification` is the
+    requester's own reason in their own words, or empty if they gave none. Risk tier and approvers are decided
+    by policy, not by the caller."""
     args = {"employee_email": employee_email, "system_key": system_key, "access_level": access_level,
             "justification": justification}
     result = _file_request(employee_email, system_key, access_level, justification)

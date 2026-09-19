@@ -21,3 +21,11 @@ One line per ambiguity or deviation from `SPEC.md`, with the reason.
 - Approvers are stored as `[{"role": "manager"|"owner", "email": ...}]`. When the requester owns the system, the owner slot is filled by their manager, so the role labels stay the same and the sync job still looks for both approval labels.
 - A requester with no manager on file (only Morgan Lee, the top of the tree) cannot be routed; `create_access_request` returns `no_manager` instead of guessing an approver.
 - Rejected requests are ignored by `existing_access`, so someone can ask again after a rejection.
+
+## Agent
+
+- The model is told to call `create_access_request` as soon as it knows the system and level, instead of always calling `check_existing_access` first. The spec's goal ("check existing access before filing, so people are not asked for details they will not need") holds because `create_access_request` runs the existing-access check in code *before* the justification check. Reason: qwen2.5-7b rarely makes two tool calls in a row, and this keeps the decision in code rather than in the model's chaining.
+- Conversation history keeps only the user's messages and the final replies, not tool calls and results. That is enough for multi-turn requests, and it keeps an 8K context from filling up.
+- After the last allowed tool round, the model is called once more without tools, so a conversation always ends with a text reply.
+- Added a reply check in `Agent` (not in the spec): a reply that claims a filing, shows a link, or names a handbook file must be backed by a tool result from the same turn. Otherwise the model gets one correction round, then a fixed safe reply. Reason: the chosen local model invented filings and links during phase 5, and telling an employee they have filed a request when they have not is a real failure even if no database invariant breaks.
+- `evals/run_evals.py` counts a `duplicate`-category case as passing on either `duplicate` or `already_has`, as section 13's table allows.

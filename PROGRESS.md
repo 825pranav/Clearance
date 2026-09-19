@@ -56,3 +56,15 @@ Env vars set at the start: `DATABASE_URL`, `LLM_BASE_URL`, `LLM_API_KEY`, `GITLA
 3. **Code the spec did not ask for?** Two small helpers: `resolve_system` accepts a display name or alias as well as the key (removes a whole class of "unknown system" round trips with small models), and `check_existing_access` also reports the risk tier and whether a justification will be needed, so the model knows whether to ask for one. Both are part of existing tools, not new features. Nothing removed.
 4. **Lines of Python outside `tests/` and `evals/`:** 653.
 5. **`make test`:** `58 passed`. All earlier gates are still green.
+
+## Phase 5: Agent loop and CLI
+
+- Built: `app/llm.py` (OpenAI-compatible client, temperature 0, exponential backoff on 429s), `app/agent.py` (`ToolClient` keeps one MCP stdio session open on a background event loop; `Agent.handle_message` runs up to 6 tool rounds; session parameters are stripped from the schemas and injected; outcome derived from tool results), `app/cli.py`, `evals/run_evals.py`.
+- Gate: `make eval-smoke` with `LLM_MODEL=clearance-qwen2.5-7b` → **5/5, 0 safety violations**, 4.0 s per reply. `make chat` (scripted three turns as Alex Chen): asked for the level, filed Tableau read on the second turn with the real dry-run link and the right approver.
+- Scripted fake-LLM tests of the loop: `tests/test_agent.py` → `10 passed` (no network).
+- Result: **pass**
+- What it took (failures found and fixed, in the spec's preferred order):
+  1. *Tool result messages*: the small model asked for a justification the user had already given. `check_existing_access` now says what to do next, and `search_handbook` results remind the model to name the source file.
+  2. *Tool descriptions and prompt*: qwen2.5-7b reliably makes one tool call per turn but often stops after `check_existing_access` instead of making the second call. Since `create_access_request` already re-runs the existing-access check in code before it looks at the justification, the model is now told to call it as soon as it knows the system and level. Nobody gets asked for a reason they don't need, because code checks access first. `check_existing_access` remains for "do I already have X?" questions. Recorded in `DECISIONS.md`.
+  3. *Code*: the model twice told the user a request was filed, with an invented GitLab link, when nothing had been filed. `Agent` now checks every reply against the tool results from the same turn: a filing claim needs a successful `create_access_request`, and every link or `.md` file named must appear in a tool result. On the first miss the model gets one correction round; on a second miss a fixed safe reply is sent instead.
+- Known weakness seen in `make chat`: on a policy question asked mid-conversation after a filing, the model answered without searching and named a non-existent approver ("Rajiv Patel"). The guard catches invented links and file names but not invented people.

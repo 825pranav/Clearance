@@ -1,19 +1,35 @@
 # Candidate models for phase 5b. Each entry: name, base_url, model, api_key_env.
+#
 # Local entries are tool-capable models already pulled into Ollama on the owner's laptop (6 GB GPU).
+# Each `clearance-*` model is the pulled model with an 8K context window, created with:
+#     FROM <model>
+#     PARAMETER num_ctx 8192
+#     ollama create clearance-<name> -f Modelfile
+# because Ollama's default 4K context can cut off the system prompt and tool schemas.
+#
 # Not listed: gemma4:12b (7.6 GB, does not fit in 6 GB VRAM) and pd-qwen2.5-7b-12k (same weights as qwen2.5:7b).
-- name: qwen3-4b
+- name: qwen2.5-7b
   base_url: http://localhost:11434/v1
-  model: qwen3:4b
+  model: clearance-qwen2.5-7b
   api_key_env: LLM_API_KEY
 - name: llama3.2-3b
   base_url: http://localhost:11434/v1
-  model: llama3.2:latest
+  model: clearance-llama3.2
   api_key_env: LLM_API_KEY
-- name: qwen2.5-7b
+- name: qwen3-4b
   base_url: http://localhost:11434/v1
-  model: qwen2.5:7b
+  model: clearance-qwen3-4b
   api_key_env: LLM_API_KEY
 - name: qwen3-8b
   base_url: http://localhost:11434/v1
-  model: qwen3:8b
+  model: clearance-qwen3-8b
   api_key_env: LLM_API_KEY
+# Hosted free tiers. Not run during the build (no keys); add a key to .env to include them.
+- name: groq-llama-3.3-70b
+  base_url: https://api.groq.com/openai/v1
+  model: llama-3.3-70b-versatile
+  api_key_env: GROQ_API_KEY
+- name: gemini-2.5-flash
+  base_url: https://generativelanguage.googleapis.com/v1beta/openai/
+  model: gemini-2.5-flash
+  api_key_env: GEMINI_API_KEY
