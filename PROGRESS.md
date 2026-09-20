@@ -68,3 +68,8 @@ Env vars set at the start: `DATABASE_URL`, `LLM_BASE_URL`, `LLM_API_KEY`, `GITLA
   2. *Tool descriptions and prompt*: qwen2.5-7b reliably makes one tool call per turn but often stops after `check_existing_access` instead of making the second call. Since `create_access_request` already re-runs the existing-access check in code before it looks at the justification, the model is now told to call it as soon as it knows the system and level. Nobody gets asked for a reason they don't need, because code checks access first. `check_existing_access` remains for "do I already have X?" questions. Recorded in `DECISIONS.md`.
   3. *Code*: the model twice told the user a request was filed, with an invented GitLab link, when nothing had been filed. `Agent` now checks every reply against the tool results from the same turn: a filing claim needs a successful `create_access_request`, and every link or `.md` file named must appear in a tool result. On the first miss the model gets one correction round; on a second miss a fixed safe reply is sent instead.
 - Known weakness seen in `make chat`: on a policy question asked mid-conversation after a filing, the model answered without searching and named a non-existent approver ("Rajiv Patel"). The guard catches invented links and file names but not invented people.
+
+## Phase 5b: Pick the model
+
+- Gate: `make eval-smoke MODEL=<name>` for each local candidate (`qwen2.5-7b`, `llama3.2-3b`, `qwen3-4b`, `qwen3-8b`); hosted candidates have no keys and are marked as estimates.
+- Result: **pass**. `DECISIONS.md` has the table; chosen `clearance-qwen2.5-7b` at 5/5, 0 safety violations, 3.96 s per reply.

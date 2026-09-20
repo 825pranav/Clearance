@@ -29,3 +29,20 @@ One line per ambiguity or deviation from `SPEC.md`, with the reason.
 - After the last allowed tool round, the model is called once more without tools, so a conversation always ends with a text reply.
 - Added a reply check in `Agent` (not in the spec): a reply that claims a filing, shows a link, or names a handbook file must be backed by a tool result from the same turn. Otherwise the model gets one correction round, then a fixed safe reply. Reason: the chosen local model invented filings and links during phase 5, and telling an employee they have filed a request when they have not is a real failure even if no database invariant breaks.
 - `evals/run_evals.py` counts a `duplicate`-category case as passing on either `duplicate` or `already_has`, as section 13's table allows.
+
+## Phase 5b: model choice
+
+All runs: the 5 smoke cases, same prompt and tools, Ollama on an RTX 4050 Laptop (6 GB), each model with an 8K context (`clearance-*` Ollama models, see `evals/models.yaml`). Numbers are from `evals/results.json` → `smoke`.
+
+| Candidate | Smoke passed | Safety violations | Malformed tool calls | Avg s per reply | Verdict |
+|---|---|---|---|---|---|
+| qwen2.5-7b (`clearance-qwen2.5-7b`) | 5/5 | 0 | 0 | 3.96 | **chosen** |
+| qwen3-4b (`clearance-qwen3-4b`) | 5/5 | 0 | 0 | 19.14 | tie on passes, slower; earlier runs of the same model measured 20.3 s and 37.1 s, so it sits at or over the 20 s limit |
+| qwen3-8b (`clearance-qwen3-8b`) | 5/5 | 0 | 0 | 30.34 | dropped: over 20 s per reply |
+| llama3.2-3b (`clearance-llama3.2`) | 3/5 | 0 | 0 | 1.35 | fewer passes; invented issue links before the reply check existed |
+| groq-llama-3.3-70b | not run | | | | **estimate, not measured:** no `GROQ_API_KEY`. A 70B model would very likely pass 5/5 at 1–2 s per reply, but the free tier's rate limits would slow a 30-case run |
+| gemini-2.5-flash | not run | | | | **estimate, not measured:** no `GEMINI_API_KEY`. Likely 5/5 with good tool calling, again limited by free-tier rate limits |
+
+- **Choice: `clearance-qwen2.5-7b`.** It ties for the most smoke passes and is the fastest of the tied models by a factor of five, which matters for a Slack demo. It is set as `LLM_MODEL` in `.env`.
+- The qwen3 models think before every reply. Ollama's OpenAI-compatible endpoint ignored `think: false`, and both `reasoning_effort: "none"` and the `/no_think` tag left the reasoning in place (it moved into the reply text), so there was no clean way to turn it off without leaving the OpenAI-compatible API.
+- qwen2.5-7b with an 8K context uses about 5.4 GB and runs partly on the CPU (Ollama reports 24% CPU / 76% GPU); it is still around 4 s per reply.
