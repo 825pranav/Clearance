@@ -4,6 +4,10 @@ Errors come back as {"ok": False, "error": <code>, "message": ...} instead of ex
 read them and react. All policy decisions are made here and in policy.py, never by the caller.
 """
 
+import uuid
+
+import psycopg
+
 from app import config, db, gitlab_client, policy, retrieval
 
 
@@ -32,13 +36,15 @@ def _assess(employee: dict, system: dict, access_level: str) -> tuple[str, dict]
     if result == "baseline":
         message = f"The {employee['role']} role already includes {level} access to {name}, which covers {access_level}. No request is needed."
         return result, {"message": message}
-    if result in ("already_granted", "open_request"):
-        status = "approved" if result == "already_granted" else "pending"
-        match = next(r for r in reversed(earlier) if r["status"] == status and policy.covers(r["access_level"], access_level))
-        if result == "already_granted":
-            message = f"Request #{match['id']} for {match['access_level']} access to {name} was already approved, which covers {access_level}."
-        else:
-            message = f"Request #{match['id']} for {match['access_level']} access to {name} is already open and waiting for approval."
+    if result == "already_granted":
+        match = next(r for r in reversed(earlier) if r["status"] == "approved" and policy.covers(r["access_level"], access_level))
+        message = f"Request #{match['id']} for {match['access_level']} access to {name} was already approved, which covers {access_level}."
+        return result, {"message": message, "request_id": match["id"], "issue_url": match["gitlab_issue_url"]}
+    if result == "open_request":
+        match = next(r for r in reversed(earlier) if r["status"] in policy.OPEN_STATES)
+        message = (f"Request #{match['id']} for {match['access_level']} access to {name} is still open "
+                   f"({match['status'].replace('_', ' ')}). Only one open request per system is allowed; "
+                   "a new one can be filed once it is decided.")
         return result, {"message": message, "request_id": match["id"], "issue_url": match["gitlab_issue_url"]}
     return result, {"message": f"No existing {access_level} access to {name}. A new request can be filed."}
 
@@ -51,10 +57,11 @@ def _policy_reference(system: dict) -> tuple[str, str]:
 
 
 def _render_issue(employee: dict, system: dict, access_level: str, justification: str, risk: str,
-                  approvers: list[dict]) -> tuple[str, str]:
+                  approvers: list[dict], idempotency_key) -> tuple[str, str]:
     checklist = "\n".join(f"- [ ] {a['role'].capitalize()}: {_name(a['email'])} ({a['email']})" for a in approvers)
     source, snippet = _policy_reference(system)
     body = config.TEMPLATE_PATH.read_text(encoding="utf-8").format(
+        marker=gitlab_client.idempotency_marker(idempotency_key),
         employee_name=employee["name"], employee_role=employee["role"], employee_department=employee["department"],
         employee_email=employee["email"], system_name=system["name"], system_key=system["key"],
         access_level=access_level, risk_tier=risk,
@@ -86,7 +93,9 @@ def _validate(employee_email: str, system_key: str, access_level: str):
 
 
 def search_handbook(query: str, conversation_id: str = "") -> dict:
-    """Search the access policy handbook. Returns the 3 most relevant sections with their source file and heading."""
+    """Search the access policy handbook. Call this before answering any question about access policy, the request
+    process, approvals, timelines or access levels, and pass the person's question in full as the query.
+    Returns the 3 most relevant sections with their source file and heading."""
     result = {"ok": True, "results": retrieval.search_handbook(query, k=3),
               "note": "When you answer from these results, name the source file you used, e.g. (source: least-privilege.md)."}
     return _record("search_handbook", {"query": query}, result, conversation_id)
@@ -124,14 +133,15 @@ def check_existing_access(employee_email: str, system_key: str, access_level: st
     return _record("check_existing_access", args, result, conversation_id)
 
 
-def create_access_request(employee_email: str, system_key: str, access_level: str, justification: str = "",
+def create_access_request(employee_email: str, system_key: str, access_level: str, justification: str,
                           conversation_id: str = "") -> dict:
     """File an access request as a GitLab issue for the requester. Call it as soon as they have asked for access
     and you know the system and access level. It checks existing access first and refuses if they already have
-    it or already have an open request. If the risk tier needs a reason and none was given, it returns the error
-    justification_required, and only then should you ask why they need the access. `justification` is the
-    requester's own reason in their own words, or empty if they gave none. Risk tier and approvers are decided
-    by policy, not by the caller."""
+    it or already have an open request.
+    `justification`: the reason the requester gave for needing the access, copied from their messages in their
+    own words (usually the part after "to", "so I can", "for" or "because"). Use an empty string only if they
+    gave no reason at all; if the risk tier needs one, the tool then returns justification_required and you ask.
+    Risk tier and approvers are decided by policy, not by the caller."""
     args = {"employee_email": employee_email, "system_key": system_key, "access_level": access_level,
             "justification": justification}
     result = _file_request(employee_email, system_key, access_level, justification)
@@ -162,13 +172,24 @@ def _file_request(employee_email: str, system_key: str, access_level: str, justi
                       f"{policy.MIN_JUSTIFICATION_WORDS} words. Ask the requester why they need it; "
                       "the reason must be in their own words, never written for them.")
 
-    title, body = _render_issue(employee, system, level, justification, risk, approvers)
+    # Crash-safe filing (phase D2): row first with a fresh key, then the issue carrying that key, then link them.
+    # If the process dies in between, sync.reconcile() finds the issue by its key or marks the row failed.
+    key = uuid.uuid4()
+    try:
+        request_id = db.insert_request(employee["email"], system["key"], level, justification, risk, approvers,
+                                       status="filing", idempotency_key=key)
+    except psycopg.errors.UniqueViolation:  # another request for this system was opened at the same moment
+        return _error("duplicate_request", f"An open request for {system['name']} already exists.", existing="open_request")
+    title, body = _render_issue(employee, system, level, justification, risk, approvers, key)
     try:
         issue = gitlab_client.get_client().create_issue(title, body, ["access-request", f"risk::{risk}", "status::pending"])
     except Exception as exc:
-        return _error("gitlab_error", f"The GitLab issue could not be created: {exc}")
-    request_id = db.insert_request(employee["email"], system["key"], level, justification, risk, approvers)
-    db.set_request_issue(request_id, issue["iid"], issue["url"])
+        db.audit("issue_create_failed", "agent", {"error": str(exc)}, request_id=request_id)
+        return _error("gitlab_error", "GitLab did not confirm the issue. The request is saved and is checked "
+                      "automatically within two minutes: it either gets its issue or is marked failed.",
+                      request_id=request_id)
+    db.attach_issue(request_id, issue["iid"], issue["url"])
+    db.advance(request_id, "issue_created", actor="agent")
     db.audit("request_filed", "agent", {"issue_url": issue["url"], "risk_tier": risk}, request_id=request_id)
     return {"ok": True, "request_id": request_id, "issue_url": issue["url"], "risk_tier": risk, "status": "pending",
             "approvers": [{"role": a["role"], "name": _name(a["email"])} for a in approvers]}

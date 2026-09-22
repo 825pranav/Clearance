@@ -46,3 +46,9 @@ All runs: the 5 smoke cases, same prompt and tools, Ollama on an RTX 4050 Laptop
 - **Choice: `clearance-qwen2.5-7b`.** It ties for the most smoke passes and is the fastest of the tied models by a factor of five, which matters for a Slack demo. It is set as `LLM_MODEL` in `.env`.
 - The qwen3 models think before every reply. Ollama's OpenAI-compatible endpoint ignored `think: false`, and both `reasoning_effort: "none"` and the `/no_think` tag left the reasoning in place (it moved into the reply text), so there was no clean way to turn it off without leaving the OpenAI-compatible API.
 - qwen2.5-7b with an 8K context uses about 5.4 GB and runs partly on the CPU (Ollama reports 24% CPU / 76% GPU); it is still around 4 s per reply.
+
+## Phase 6
+
+- `create_access_request.justification` is a required parameter (an empty string means "no reason given"). With it optional, qwen2.5-7b left it out even when the user's message contained a reason.
+- The agent checks required tool arguments before calling the MCP server and returns a structured `invalid_arguments` error naming what is missing. The MCP SDK's own validation error was too generic for a small model to act on.
+- Phase 6 ran after the D1/D2 code was written (but before those gates were committed), so the eval numbers describe the final lifecycle code.

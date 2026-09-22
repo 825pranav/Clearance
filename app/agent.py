@@ -220,8 +220,13 @@ class Agent:
                 raise ValueError
         except ValueError:
             return {"ok": False, "error": "invalid_arguments", "message": "Tool arguments must be a JSON object."}, {}
-        allowed = known[name]["function"]["parameters"].get("properties", {})
-        args = {k: v for k, v in args.items() if k in allowed}  # drops any session parameter the model tried to set
+        parameters = known[name]["function"]["parameters"]
+        args = {k: v for k, v in args.items() if k in parameters.get("properties", {})}  # drops session parameters
+        missing = [p for p in parameters.get("required", []) if p not in args]
+        if missing:
+            hint = (" Call the tool again now with justification set to the reason the requester gave, in their words, "
+                    "or an empty string if they gave none." if "justification" in missing else "")
+            return {"ok": False, "error": "invalid_arguments", "message": f"Missing argument(s): {', '.join(missing)}.{hint}"}, args
         full_args = {**args, "conversation_id": conversation_id}
         original = next(t for t in self.tools.tools if t.name == name)
         if "employee_email" in original.input_schema.get("properties", {}):

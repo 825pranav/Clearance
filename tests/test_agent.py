@@ -101,6 +101,14 @@ def test_malformed_and_unknown_tool_calls_are_reported_back(seeded, tool_client)
     assert [step["result"]["error"] for step in result.trace] == ["invalid_arguments", "unknown_tool"]
 
 
+def test_missing_required_argument_is_explained_to_the_model(seeded, tool_client):
+    llm = ScriptedLLM(calls(tool_call("create_access_request", system_key="tableau", access_level="read")), says("ok"))
+    result = Agent(llm=llm, tools=tool_client).handle_message(ALEX, "conv-9", "tableau read")
+    assert result.trace[0]["result"]["error"] == "invalid_arguments"
+    assert "justification" in result.trace[0]["result"]["message"]
+    assert result.malformed_tool_calls == 1 and _requests() == []
+
+
 def test_history_is_kept_per_conversation(seeded, tool_client):
     llm = ScriptedLLM(says("Which level?"), says("Thanks."), says("Hello."))
     agent = Agent(llm=llm, tools=tool_client)
