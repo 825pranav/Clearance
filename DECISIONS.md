@@ -52,3 +52,10 @@ All runs: the 5 smoke cases, same prompt and tools, Ollama on an RTX 4050 Laptop
 - `create_access_request.justification` is a required parameter (an empty string means "no reason given"). With it optional, qwen2.5-7b left it out even when the user's message contained a reason.
 - The agent checks required tool arguments before calling the MCP server and returns a structured `invalid_arguments` error naming what is missing. The MCP SDK's own validation error was too generic for a small model to act on.
 - Phase 6 ran after the D1/D2 code was written (but before those gates were committed), so the eval numbers describe the final lifecycle code.
+
+## Phase D1
+
+- `transition` takes a `State(status, approvals)` rather than a bare status string. With only the status, `partially_approved` cannot tell a replayed `manager_approved` (must be a no-op) from the second, different approval (must approve), so the set of approvals recorded so far is part of the state. It is stored in a `requests.approvals TEXT[]` column.
+- An `owner_approved` label on a low- or medium-risk request is recorded but does not change the status, because those tiers only require the manager.
+- Terminal states ignore later events instead of raising, so a label added to an already-approved issue is harmless when the sync job polls it.
+- The phase 7 sync spec says high risk "stays pending with one label"; D1 overrides that, so it moves to `partially_approved`.

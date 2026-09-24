@@ -4,6 +4,8 @@ Nothing in this module touches the database, the network or the LLM. The tools l
 (employee, system, existing requests) and pass them in, so each rule can be unit tested directly.
 """
 
+from dataclasses import dataclass
+
 LEVELS = ("read", "write", "admin")
 RISKS = ("low", "medium", "high")
 MIN_JUSTIFICATION_WORDS = 8
@@ -56,17 +58,74 @@ def validate_justification(risk: str, text: str | None) -> bool:
     return len((text or "").split()) >= MIN_JUSTIFICATION_WORDS
 
 
+# ---------------------------------------------------------------- request lifecycle
+
+STATES = ("filing", "pending", "partially_approved", "approved", "rejected", "failed")
+TERMINAL = ("approved", "rejected", "failed")
+OPEN_STATES = ("filing", "pending", "partially_approved")
+EVENTS = ("issue_created", "issue_failed", "manager_approved", "owner_approved", "rejected")
+APPROVAL_EVENTS = {"manager_approved": "manager", "owner_approved": "owner"}
+REQUIRED_APPROVALS = {"low": {"manager"}, "medium": {"manager"}, "high": {"manager", "owner"}}
+
+
+class IllegalTransition(Exception):
+    pass
+
+
+@dataclass(frozen=True)
+class State:
+    """A request's status plus the approvals recorded so far.
+
+    The approvals are part of the state because the sync job sees the same labels on every poll: to make a
+    repeated `manager_approved` harmless while a different second approval completes a high-risk request,
+    the machine has to remember which approvals it already has.
+    """
+
+    status: str
+    approvals: frozenset = frozenset()
+
+
+def transition(state: State, event: str, risk: str) -> State:
+    """The only way a request's status changes. Pure: same input, same output, no I/O.
+
+    Raises IllegalTransition for events that make no sense in the current state (approving a request whose
+    issue does not exist yet, failing a request that was filed). Terminal states ignore every event.
+    """
+    if event not in EVENTS:
+        raise IllegalTransition(f"unknown event {event!r}")
+    if state.status in TERMINAL:
+        return state
+    if event == "issue_created":
+        return State("pending", state.approvals) if state.status == "filing" else state
+    if event == "issue_failed":
+        if state.status != "filing":
+            raise IllegalTransition(f"issue_failed in state {state.status}: the issue already exists")
+        return State("failed", state.approvals)
+    if state.status == "filing":
+        raise IllegalTransition(f"{event} in state filing: there is no issue to act on yet")
+    if event == "rejected":
+        return State("rejected", state.approvals)
+    approvals = state.approvals | {APPROVAL_EVENTS[event]}
+    required = REQUIRED_APPROVALS[risk]
+    if required <= approvals:
+        return State("approved", approvals)
+    return State("partially_approved" if approvals & required else "pending", approvals)
+
+
 def existing_access(access_level: str, baseline_level: str | None, requests: list[dict]) -> str:
     """Whether the employee already has, or already asked for, this access.
 
     `baseline_level` is what the employee's role includes for this system (None if nothing).
     `requests` are the employee's earlier requests for this system, each with `access_level` and `status`.
     Returns "baseline", "already_granted", "open_request" or "none".
+
+    One open request per employee per system, at any level: a second one waits until the first is decided.
+    The database enforces the same rule with a partial unique index, so a race cannot get around it.
     """
     if baseline_level and covers(baseline_level, access_level):
         return "baseline"
     if any(r["status"] == "approved" and covers(r["access_level"], access_level) for r in requests):
         return "already_granted"
-    if any(r["status"] == "pending" and covers(r["access_level"], access_level) for r in requests):
+    if any(r["status"] in OPEN_STATES for r in requests):
         return "open_request"
     return "none"
