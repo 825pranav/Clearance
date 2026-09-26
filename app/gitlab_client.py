@@ -12,6 +12,11 @@ class GitLabError(Exception):
     pass
 
 
+def idempotency_marker(key) -> str:
+    """Hidden text in every issue body that ties the issue to its request row (see sync.reconcile)."""
+    return f"clearance-key: {key}"
+
+
 class DryRunGitLab:
     """Keeps issues in memory and returns fake URLs. Two switches simulate crashes for the D2 tests."""
 
@@ -59,7 +64,8 @@ class GitLabClient:
 
         if not token or not project_id:
             raise GitLabError("GITLAB_TOKEN and GITLAB_PROJECT_ID must be set when GITLAB_DRY_RUN=0")
-        self._gl = gitlab.Gitlab(url, private_token=token)
+        # A short timeout keeps any create call well inside reconcile's 60-second window.
+        self._gl = gitlab.Gitlab(url, private_token=token, timeout=20)
         self._project = self._gl.projects.get(project_id)
 
     def create_issue(self, title: str, description: str, labels: list[str]) -> dict:
@@ -67,7 +73,10 @@ class GitLabClient:
         return {"iid": issue.iid, "url": issue.web_url}
 
     def find_issue(self, text: str) -> dict | None:
-        for issue in self._project.issues.list(search=text, get_all=True):
+        # Search first; fall back to scanning recent access requests in case search does not index the comment.
+        candidates = list(self._project.issues.list(search=text, get_all=True))
+        candidates += list(self._project.issues.list(labels=["access-request"], order_by="created_at", per_page=100, get_all=False))
+        for issue in candidates:
             if text in (issue.description or ""):
                 return {"iid": issue.iid, "url": issue.web_url}
         return None

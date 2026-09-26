@@ -59,3 +59,9 @@ All runs: the 5 smoke cases, same prompt and tools, Ollama on an RTX 4050 Laptop
 - An `owner_approved` label on a low- or medium-risk request is recorded but does not change the status, because those tiers only require the manager.
 - Terminal states ignore later events instead of raising, so a label added to an already-approved issue is harmless when the sync job polls it.
 - The phase 7 sync spec says high risk "stays pending with one label"; D1 overrides that, so it moves to `partially_approved`.
+
+## Phase D2
+
+- When GitLab fails during filing, `create_access_request` returns `gitlab_error` and leaves the row in `filing` for `reconcile` to settle, rather than marking it `failed` at once. A timeout looks the same whether the issue was created or not, and marking it failed when the issue exists would be exactly the mismatch D2 exists to prevent. The cost: the user waits up to about two minutes before they can retry.
+- The duplicate rule is now "one open request per employee per system, at any level" (D2 overrides section 9). An approved lower level does not block asking for a higher one.
+- `GitLabClient.find_issue` searches by the key and also scans the 100 most recent `access-request` issues, in case GitLab search does not index text inside an HTML comment. Verifying this against real GitLab is in the HANDOFF checklist.

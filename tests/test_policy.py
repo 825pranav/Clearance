@@ -120,6 +120,16 @@ def test_existing_access_open_request():
     assert policy.existing_access("read", None, requests) == "open_request"
 
 
+@pytest.mark.parametrize("status", ["filing", "pending", "partially_approved"])
+def test_one_open_request_per_system_at_any_level(status):
+    """Phase D2 rule: any open request for the system blocks a new one, whatever its level."""
+    assert policy.existing_access("admin", None, [{"access_level": "read", "status": status}]) == "open_request"
+
+
+def test_failed_requests_do_not_block():
+    assert policy.existing_access("read", None, [{"access_level": "read", "status": "failed"}]) == "none"
+
+
 def test_existing_access_ignores_rejected_requests():
     assert policy.existing_access("read", None, [{"access_level": "admin", "status": "rejected"}]) == "none"
 
