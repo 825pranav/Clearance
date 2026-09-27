@@ -65,3 +65,9 @@ All runs: the 5 smoke cases, same prompt and tools, Ollama on an RTX 4050 Laptop
 - When GitLab fails during filing, `create_access_request` returns `gitlab_error` and leaves the row in `filing` for `reconcile` to settle, rather than marking it `failed` at once. A timeout looks the same whether the issue was created or not, and marking it failed when the issue exists would be exactly the mismatch D2 exists to prevent. The cost: the user waits up to about two minutes before they can retry.
 - The duplicate rule is now "one open request per employee per system, at any level" (D2 overrides section 9). An approved lower level does not block asking for a higher one.
 - `GitLabClient.find_issue` searches by the key and also scans the 100 most recent `access-request` issues, in case GitLab search does not index text inside an HTML comment. Verifying this against real GitLab is in the HANDOFF checklist.
+
+## Phase 7
+
+- The dry-run GitLab client keeps issues in the memory of the process that created them, which is the MCP tool server. The sync job runs in another process (the Slack bot, or `make sync`), so in dry-run mode it cannot see those issues. `python -m app.sync` therefore refuses to start in dry-run mode, and the approval flow is verified end to end by the in-process tests (`tests/test_sync.py`). A live approval demo needs real GitLab (`GITLAB_DRY_RUN=0`).
+- `conversation_id` is `channel:thread_ts`, as specified. In a DM the user should reply in the bot's thread to continue the same conversation; a new top-level DM starts a new one.
+- The bot posts the agent's reply text as-is; it does not use Block Kit.
