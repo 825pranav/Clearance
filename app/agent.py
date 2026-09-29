@@ -26,23 +26,29 @@ MAX_TOOL_ROUNDS = 6
 SESSION_PARAMS = ("employee_email", "conversation_id")
 FALLBACK_REPLY = "Sorry, I couldn't finish that. Could you rephrase your request?"
 # Claims in a reply must be backed by tool results from the same turn: a filing needs a successful
-# create_access_request, and every link or handbook file named must appear in a tool result.
+# create_access_request, "you already have access" needs a tool that said so, and every link or handbook
+# file named must appear in a tool result.
 FILED_CLAIM = re.compile(r"\b(has been|have been|was|is now|i've|i have|i)\s+(filed|submitted|created|raised|opened)\b|"
                          r"\bissue (link|url|created)\b", re.I)
+HAS_ACCESS_CLAIM = re.compile(r"\byou (already |currently |now )?have (read |write |admin )?access\b", re.I)
+HEDGED = re.compile(r"\b(if|whether|once|when|not|don't|doesn't)\b[^.!?]*$", re.I)
 URL = re.compile(r"https?://[^\s)\]>]+")
 SOURCE = re.compile(r"\b[\w-]+\.md\b")
+NOT_FILED = "I haven't filed anything yet. Could you confirm the system, the access level (read, write or admin) and why you need it?"
 CORRECTIONS = {
     "filing": "said a request was filed, but no create_access_request call has succeeded, so nothing has been filed. "
               "If you have everything needed, call create_access_request now; otherwise reply without saying it was filed.",
+    "access": "said the person has access, but no tool result shows that. Only say so when check_existing_access or "
+              "create_access_request reports it; otherwise file the request they asked for or ask what is missing.",
     "link": "included a link that no tool returned. Only use links from tool results; reply again without inventing one.",
     "source": "named a handbook file that search_handbook did not return. Call search_handbook and answer from its "
               "results, naming the file they came from.",
 }
 SAFE_REPLIES = {
-    "filing": "I haven't filed anything yet. Could you confirm the system, the access level (read, write or admin) "
-              "and why you need it?",
-    "link": "I haven't filed anything yet. Could you confirm the system, the access level (read, write or admin) "
-            "and why you need it?",
+    "filing": NOT_FILED,
+    "access": "I couldn't confirm that you have that access, and I haven't filed anything yet. Could you confirm the "
+              "system, the access level (read, write or admin) and why you need it?",
+    "link": NOT_FILED,
     "source": "I couldn't find that in the access handbook. Could you rephrase the question?",
 }
 
@@ -149,8 +155,12 @@ Keep replies short and plain, because they appear in Slack."""
 def unbacked_claim(reply: str, trace: list[dict]) -> str | None:
     """Which kind of claim in the reply has no tool result behind it ("filing", "link", "source"), or None."""
     tool_output = json.dumps([step["result"] for step in trace])
-    if outcome_from_trace(trace)[0] != "filed" and FILED_CLAIM.search(reply):
+    outcome = outcome_from_trace(trace)[0]
+    if outcome != "filed" and FILED_CLAIM.search(reply):
         return "filing"
+    if outcome != "already_has" and any(not HEDGED.search(reply[max(0, m.start() - 60):m.start()])
+                                        for m in HAS_ACCESS_CLAIM.finditer(reply)):
+        return "access"
     if any(url.rstrip(".,") not in tool_output for url in URL.findall(reply)):
         return "link"
     if any(f'"{name}"' not in tool_output for name in SOURCE.findall(reply)):

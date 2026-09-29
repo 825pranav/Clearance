@@ -140,6 +140,23 @@ def test_repeated_false_claim_is_replaced_by_a_safe_reply(seeded, tool_client):
     assert _requests() == []
 
 
+def test_claimed_access_needs_a_tool_result_behind_it(seeded, tool_client):
+    llm = ScriptedLLM(calls(tool_call("check_existing_access", system_key="snowflake", access_level="admin")),
+                      says("It looks like you already have admin access to Snowflake."),
+                      says("You already have admin access."))
+    result = Agent(llm=llm, tools=tool_client).handle_message(ALEX, "conv-10", "admin on snowflake")
+    assert result.reply.startswith("I couldn't confirm that you have that access")
+
+
+def test_true_access_claims_and_hedged_wording_pass_the_check():
+    from app.agent import unbacked_claim
+
+    baseline = [{"tool": "check_existing_access", "result": {"ok": True, "result": "baseline"}}]
+    assert unbacked_claim("You already have write access through your role.", baseline) is None
+    assert unbacked_claim("Let me check if you already have read access.", []) is None
+    assert unbacked_claim("You don't currently have read access to Tableau.", []) is None
+
+
 def test_outcome_comes_from_tool_results_not_text():
     assert outcome_from_trace([]) == ("no_action", None)
     assert outcome_from_trace([{"tool": "check_existing_access", "result": {"ok": True, "result": "open_request"}}]) == ("duplicate", None)
