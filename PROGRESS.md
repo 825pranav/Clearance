@@ -146,3 +146,15 @@ Ran with the phase D1/D2 code already in place (state machine, `filing` status, 
 ## Direction check for depth
 
 Answered in `HANDOFF.md` under "D1, D2, D3 in two sentences each".
+
+## Phase 8: Dashboard, CI, README
+
+- Built: `dashboard/app.py` (status and risk counts, request table with issue links, audit trail for a selected request, latest eval scores from `results.json`), `.gitlab-ci.yml` (`unit-tests` job with a Postgres service; `evals` as a separate manual job that needs LLM variables), `README.md`, `tests/test_dashboard.py` (Streamlit AppTest, empty and populated), `tests/test_readme.py` (every eval number in the README must equal `results.json`). Also `python -m app.gitlab_client` (the phase 4 real-GitLab smoke test, for when a token exists) and `python -m app.slack_bot --check` (auth check only).
+- Gate: `streamlit run dashboard/app.py --server.headless true --server.port 8599` → `GET /_stcore/health` = `ok`; `make test` → `113 passed`; README numbers match `results.json` (enforced by `tests/test_readme.py`).
+- `.gitlab-ci.yml` is **not verified**: the repo has not been pushed to GitLab.
+- Result: **pass**
+
+## Direction check C and handoff
+
+- `HANDOFF.md` written: what works with the final eval tables, what was not verified live and how to verify it, "Finish setup" (GitLab token, Slack app from the manifest, `.env` lines, the gate commands), deviations, known weaknesses, D1/D2/D3 in two sentences each, a two-minute demo script (each step was run through the agent before writing it; the attack step was rewritten after the model turned out to go along with it), and five interview questions.
+- Lines of Python outside `tests/` and `evals/`: 1,432 (depth-phase budget: about 2,000).

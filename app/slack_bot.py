@@ -86,8 +86,12 @@ def main() -> None:
 
     app = build_app()  # Bolt calls auth.test here, so bad tokens fail fast
     log.info("authenticated as %s", app.client.auth_test()["user"])
+    if "--check" in sys.argv:
+        return
+    gl = gitlab_client.get_client()
+    sync.reconcile(gl)  # settle any request a crash left in `filing` before taking new messages
     notify = make_notifier(app.client)
-    threading.Thread(target=sync.run_forever, args=(gitlab_client.get_client(), notify), daemon=True).start()
+    threading.Thread(target=sync.run_forever, args=(gl, notify), daemon=True).start()
     SocketModeHandler(app, config.SLACK_APP_TOKEN).start()
 
 

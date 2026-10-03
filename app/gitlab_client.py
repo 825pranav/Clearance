@@ -4,6 +4,7 @@
 """
 
 import threading
+import uuid
 
 from app import config
 
@@ -113,3 +114,17 @@ def set_client(client) -> None:
     """Swap the client (tests use this to get a fresh dry-run client)."""
     global _client
     _client = client
+
+
+def smoke_test() -> None:
+    """Create a real `[smoke test]` issue, find it again by its marker, then close it."""
+    client = GitLabClient(config.GITLAB_URL, config.GITLAB_TOKEN, config.GITLAB_PROJECT_ID)
+    marker = idempotency_marker(f"smoke-{uuid.uuid4()}")
+    issue = client.create_issue("[smoke test] Clearance GitLab check", f"<!-- {marker} -->\nSafe to ignore.", ["smoke-test"])
+    found = client.find_issue(marker)
+    client.close_issue(issue["iid"])
+    print(f"created {issue['url']}, found again: {found is not None and found['iid'] == issue['iid']}, closed")
+
+
+if __name__ == "__main__":
+    smoke_test()
