@@ -29,7 +29,7 @@ Main suite by category: clear 9/10, vague 4/4, baseline 3/3, duplicate 3/3, high
 
 | Item | Why | How to verify |
 |---|---|---|
-| Real GitLab issue creation, search by key, labels | no `GITLAB_TOKEN` / `GITLAB_PROJECT_ID` | Finish setup step 2, then `python -m app.gitlab_client` |
+| ~~Real GitLab~~ | **verified**: smoke test passed, and a real high-risk request went filed → `partially_approved` → `approved` via labels and sync | `python -m app.gitlab_client` |
 | Slack bot startup and auth | no `SLACK_BOT_TOKEN` / `SLACK_APP_TOKEN` | Finish setup step 3, then `python -m app.slack_bot --check` |
 | Slack DM → real GitLab issue → approval label → status change + DM back | needs both of the above | the demo script below |
 | `.gitlab-ci.yml` | not pushed to a GitLab project | push the repo to GitLab and watch the `unit-tests` job |

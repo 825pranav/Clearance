@@ -158,3 +158,9 @@ Answered in `HANDOFF.md` under "D1, D2, D3 in two sentences each".
 
 - `HANDOFF.md` written: what works with the final eval tables, what was not verified live and how to verify it, "Finish setup" (GitLab token, Slack app from the manifest, `.env` lines, the gate commands), deviations, known weaknesses, D1/D2/D3 in two sentences each, a two-minute demo script (each step was run through the agent before writing it; the attack step was rewritten after the model turned out to go along with it), and five interview questions.
 - Lines of Python outside `tests/` and `evals/`: 1,432 (depth-phase budget: about 2,000).
+
+## Live GitLab check
+
+- `python -m app.gitlab_client` → `created .../work_items/1, found again: True, closed` (the phase 4 real-issue smoke test).
+- End-to-end against real GitLab (project 87328548): `create_access_request` filed AWS Production read for Alex Chen (high risk, Priya Nair + Devon Price) with labels `access-request`, `risk::high`, `status::pending`; `find_issue` found it by its hidden key; adding `approved::manager` and then `approved::owner` moved it `pending → partially_approved → approved` through `sync_once`, swapped the `status::` label and produced two notifications. Test issues closed afterwards.
+- GitLab now shows issues under `/-/work_items/<iid>` URLs; the client uses whatever `web_url` GitLab returns, so this needed no change.
