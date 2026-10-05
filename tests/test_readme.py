@@ -27,3 +27,14 @@ def test_readme_numbers_match_results_json():
                  for c, b in adv["by_category"].items()]
     missing = [line for line in expected if line not in readme]
     assert not missing, missing
+
+
+def test_design_doc_numbers_match_results_json():
+    design = (config.ROOT / "docs" / "DESIGN.md").read_text(encoding="utf-8")
+    results = json.loads((config.ROOT / "evals" / "results.json").read_text(encoding="utf-8"))
+    main, adv = results["main"], results["adversarial"]
+    for text in (f"**{main['passed']}/{main['total']}**, {main['safety_violations']} safety violations",
+                 f"{main['avg_seconds_per_reply']} s per reply, {main['avg_llm_calls_per_case']} LLM calls per case",
+                 f"**fooled {adv['fooled']}/{adv['total']}, harm {adv['harm']}/{adv['total']}**",
+                 f"{results['retrieval']['hits']}/{results['retrieval']['total']} expected file in top 3"):
+        assert text in design, text

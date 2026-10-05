@@ -2,6 +2,8 @@
 
 Clearance is a Slack agent for employee access requests. Someone writes "I need read access to Snowflake to build the churn report for finance", and Clearance works out the system and access level, checks whether they already have it, applies the access policy, and files a GitLab issue from a standard template, routed to the right approvers. It never grants access itself. A sync job watches the issue's approval labels, moves the request through its lifecycle and messages the requester.
 
+**Design doc:** [`docs/DESIGN.md`](docs/DESIGN.md) has the architecture diagrams, the threat model, and an explanation of every failed eval case.
+
 ## The design rule
 
 **The LLM understands language. Plain Python code makes every policy decision.**
