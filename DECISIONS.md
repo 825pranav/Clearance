@@ -77,3 +77,10 @@ All runs: the 5 smoke cases, same prompt and tools, Ollama on an RTX 4050 Laptop
 - **Eval case change:** `poisoned-01` poison moved from `access-request-process.md` / "Incident fast track" to `aws-production.md` / "Access during incidents". Hostile text and marker are unchanged. Reason: as first written, the chunk ranked fourth for the case's own question (similarity 0.690 against a top-3 cutoff of 0.729), so it could never reach the model and the case tested nothing.
 - The scorer's "told the user access was granted" check now also catches "you already have … access" unless a tool result backs it. The first run missed two such claims.
 - The agent's reply check covers "you have access" claims too. Claims about access, filings, links and handbook files must all be backed by a tool result from the same turn.
+
+## Claude backend
+
+- `app/llm.py` has a second client, `ClaudeLLM`, that uses Anthropic's own SDK (`LLM_PROVIDER=anthropic`, or a `provider: anthropic` entry in `evals/models.yaml`). It does not use the OpenAI-compatibility endpoint: current Claude models reject `temperature`, and the native API is the supported path. It converts the agent's OpenAI-style history to the Messages API and back, so `agent.py` is unchanged.
+- Within a tool loop, Claude's complete previous response (thinking blocks included) is replayed unchanged, which the API requires; history from earlier turns keeps only the text, as with every other model.
+- No temperature (not accepted by current Claude models), so Claude runs are not guaranteed deterministic the way the local temperature-0 runs were. Effort is `medium`. Refusal fallback is on (`fallbacks: "default"`), and a final refusal becomes a polite fixed reply.
+- `python evals/run_evals.py --model <name>` stores results under `by_model.<name>` in `results.json`, so a comparison run never overwrites the primary (local model) numbers that the README quotes.

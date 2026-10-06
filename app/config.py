@@ -16,9 +16,11 @@ def _get(name: str, default: str = "") -> str:
 
 DATABASE_URL = _get("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/clearance")
 
+LLM_PROVIDER = _get("LLM_PROVIDER", "openai")  # openai (any compatible endpoint) or anthropic
 LLM_BASE_URL = _get("LLM_BASE_URL")
 LLM_API_KEY = _get("LLM_API_KEY")
 LLM_MODEL = _get("LLM_MODEL")
+ANTHROPIC_API_KEY = _get("ANTHROPIC_API_KEY")
 
 GITLAB_URL = _get("GITLAB_URL", "https://gitlab.com")
 GITLAB_TOKEN = _get("GITLAB_TOKEN")

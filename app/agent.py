@@ -19,7 +19,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from app import config, db
-from app.llm import LLM
+from app import llm as llm_clients
 
 MAX_TOOL_ROUNDS = 6
 # Filled in from the session on every call and hidden from the model, so it cannot pick who a request is for.
@@ -174,8 +174,8 @@ def _clean(text: str | None) -> str:
 
 
 class Agent:
-    def __init__(self, llm: LLM | None = None, tools: ToolClient | None = None):
-        self.llm = llm or LLM()
+    def __init__(self, llm=None, tools: ToolClient | None = None):
+        self.llm = llm or llm_clients.create()
         self.tools = tools or ToolClient()
         self.tool_schemas = openai_tool_schemas(self.tools.tools)
         self.system_prompt = system_prompt(db.list_systems())

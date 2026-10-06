@@ -33,3 +33,12 @@
   base_url: https://generativelanguage.googleapis.com/v1beta/openai/
   model: gemini-2.5-flash
   api_key_env: GEMINI_API_KEY
+# Claude through the Anthropic SDK (app/llm.py ClaudeLLM). Needs ANTHROPIC_API_KEY in .env.
+- name: claude-opus-5-5
+  provider: anthropic
+  model: claude-opus-5-5
+  api_key_env: ANTHROPIC_API_KEY
+- name: claude-sonnet-5-5
+  provider: anthropic
+  model: claude-sonnet-5-5
+  api_key_env: ANTHROPIC_API_KEY

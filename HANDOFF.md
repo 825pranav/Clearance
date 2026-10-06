@@ -33,7 +33,7 @@ Main suite by category: clear 9/10, vague 4/4, baseline 3/3, duplicate 3/3, high
 | Slack bot startup and auth | no `SLACK_BOT_TOKEN` / `SLACK_APP_TOKEN` | Finish setup step 3, then `python -m app.slack_bot --check` |
 | Slack DM → real GitLab issue → approval label → status change + DM back | needs both of the above | the demo script below |
 | `.gitlab-ci.yml` | not pushed to a GitLab project | push the repo to GitLab and watch the `unit-tests` job |
-| Hosted models (Groq, Gemini) in the model comparison | no keys | add the key and run `make eval-smoke MODEL=groq-llama-3.3-70b` |
+| Hosted models (Groq, Gemini, Claude) in the model comparison | no keys | add the key and run `make eval-smoke MODEL=<name>`; for Claude see Finish setup step 4 |
 
 ## Finish setup
 
@@ -97,7 +97,19 @@ Tests and evals always force `GITLAB_DRY_RUN=1`, so they never create real issue
    make slack
    ```
 
-### 4. Gates to re-run once everything is configured
+### 4. Optional: run the same evals on Claude
+
+1. Get an API key at https://console.anthropic.com → API keys, and add it to `.env`: `ANTHROPIC_API_KEY=sk-ant-...`
+2. Run both suites (about $2–4 on Claude Opus 5.5; results go to `by_model` in `evals/results.json` and a comparison table in `evals/results.md`, never over the local-model numbers):
+
+   ```bash
+   .venv/Scripts/python evals/run_evals.py --model claude-opus-5-5
+   .venv/Scripts/python evals/run_evals.py --adversarial --model claude-opus-5-5
+   ```
+
+3. To run the bot itself on Claude: `LLM_PROVIDER=anthropic` and `LLM_MODEL=claude-opus-5-5` in `.env`.
+
+### 5. Gates to re-run once everything is configured
 
 ```bash
 make test                  # 113 passed, no network needed

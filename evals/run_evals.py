@@ -37,7 +37,7 @@ os.environ["GITLAB_DRY_RUN"] = "1"
 
 from app import config, db, policy, retrieval  # noqa: E402
 from app.agent import Agent, ToolClient  # noqa: E402
-from app.llm import LLM  # noqa: E402
+from app import llm as llm_clients  # noqa: E402
 
 EVALS = ROOT / "evals"
 RESULTS_JSON = EVALS / "results.json"
@@ -182,16 +182,21 @@ def model_settings(name: str | None) -> dict:
     if not name:
         if not config.LLM_MODEL:
             sys.exit("LLM_MODEL is not set in .env; set it or pass --model NAME from evals/models.yaml")
-        return {"name": config.LLM_MODEL, "base_url": config.LLM_BASE_URL, "model": config.LLM_MODEL,
-                "api_key": config.LLM_API_KEY}
+        return {"name": config.LLM_MODEL, "provider": config.LLM_PROVIDER, "base_url": config.LLM_BASE_URL,
+                "model": config.LLM_MODEL, "api_key": config.LLM_API_KEY}
     entry = next((m for m in load("models.yaml") if m["name"] == name), None)
     if not entry:
         sys.exit(f"no model named {name!r} in evals/models.yaml")
     return {**entry, "api_key": os.environ.get(entry.get("api_key_env", ""), "")}
 
 
-def make_agent(settings: dict, tools: ToolClient, llm: LLM | None = None) -> Agent:
-    llm = llm or LLM(settings["base_url"], settings["api_key"], settings["model"])
+def new_llm(settings: dict):
+    return llm_clients.create(settings.get("provider", "openai"), settings.get("base_url"), settings["api_key"],
+                              settings["model"])
+
+
+def make_agent(settings: dict, tools: ToolClient, llm=None) -> Agent:
+    llm = llm or new_llm(settings)
     return Agent(llm=llm, tools=tools)
 
 
@@ -239,7 +244,7 @@ def run_main(settings: dict, smoke: bool, repeat: int) -> dict:
 def run_adversarial(settings: dict) -> dict:
     cases = load("adversarial.yaml")
     base_tools = ToolClient()
-    llm = LLM(settings["base_url"], settings["api_key"], settings["model"])
+    llm = new_llm(settings)
     llm.chat([{"role": "user", "content": "Reply with the word ready."}])
     results = []
     try:
@@ -342,7 +347,18 @@ def render_markdown(results: dict) -> str:
         out += [f"| {name} | {s['passed']}/{s['total']} | {s['safety_violations']} | {s['malformed_tool_calls']} | "
                 f"{s['avg_seconds_per_reply']} | {s['avg_llm_calls_per_case']} |" for name, s in smoke.items()]
         out += [""]
+    by_model = results.get("by_model", {})
+    if by_model:
+        out += ["## Other models (same suites)", "", "| Model | Main passed | Safety violations | s per reply | Adversarial fooled | Adversarial harm |",
+                "|---|---|---|---|---|---|"]
+        for name, entry in by_model.items():
+            m, a = entry.get("main") or {}, entry.get("adversarial") or {}
+            main_cells = [f"{m['passed']}/{m['total']}", str(m["safety_violations"]), str(m["avg_seconds_per_reply"])] if m else ["not run", "", ""]
+            adv_cells = [f"{a['fooled']}/{a['total']}", f"{a['harm']}/{a['total']}"] if a else ["not run", "not run"]
+            out.append("| " + " | ".join([name, *main_cells, *adv_cells]) + " |")
+        out += [""]
     sections = [("Main suite failures", main)] + [(f"Smoke failures ({n})", s) for n, s in smoke.items()]
+    sections += [(f"Main suite failures ({n})", e.get("main")) for n, e in by_model.items()]
     for title, suite in sections:
         failed = [c for c in (suite or {}).get("cases", []) if not c["passed"]]
         if failed:
@@ -370,8 +386,10 @@ def transcript(case: dict) -> list[str]:
 def save(update: dict) -> None:
     results = json.loads(RESULTS_JSON.read_text(encoding="utf-8")) if RESULTS_JSON.exists() else {}
     for key, value in update.items():
-        if key == "smoke":
-            results.setdefault("smoke", {}).update(value)
+        if key in ("smoke", "by_model"):
+            for name, entry in value.items():  # merge, so runs of other models are kept
+                results.setdefault(key, {}).setdefault(name, {})
+                results[key][name] = entry if key == "smoke" else {**results[key][name], **entry}
         else:
             results[key] = value
     RESULTS_JSON.write_text(json.dumps(results, indent=1, default=str), encoding="utf-8")
@@ -390,9 +408,13 @@ def main() -> None:
     db.reset()
     settings = model_settings(args.model)
 
+    # The model configured in .env is the primary result; --model runs are kept per model for comparison.
+    def store(kind: str, value: dict) -> None:
+        save({kind: value} if not args.model else {"by_model": {settings["name"]: {kind: value}}})
+
     if args.adversarial:
         adv = run_adversarial(settings)
-        save({"adversarial": adv})
+        store("adversarial", adv)
         print(f"\nadversarial: fooled {adv['fooled']}/{adv['total']}, harm {adv['harm']}/{adv['total']}")
         sys.exit(1 if adv["harm"] else 0)
 
@@ -400,6 +422,8 @@ def main() -> None:
     first = outcome["runs"][0]
     if args.smoke:
         save({"smoke": {settings["name"]: first}})
+    elif args.model:
+        store("main", first)
     else:
         update = {"main": first, "retrieval": run_retrieval()}
         if args.repeat > 1:
