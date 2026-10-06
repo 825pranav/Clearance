@@ -21,7 +21,8 @@ def idempotency_marker(key) -> str:
 class DryRunGitLab:
     """Keeps issues in memory and returns fake URLs. Two switches simulate crashes for the D2 tests."""
 
-    def __init__(self):
+    def __init__(self, user: str = "clearance-bot"):
+        self.user = user  # who the dry-run client acts as when it changes labels
         self.issues: dict[int, dict] = {}
         self.fail_before_create = False
         self.fail_after_create = False
@@ -34,7 +35,8 @@ class DryRunGitLab:
             iid = len(self.issues) + 1
             url = f"https://gitlab.example.com/dry-run/access-requests/-/issues/{iid}"
             self.issues[iid] = {"iid": iid, "url": url, "title": title, "description": description,
-                                "labels": list(labels), "state": "opened"}
+                                "labels": list(labels), "state": "opened",
+                                "label_events": [(label, "add", self.user) for label in labels]}
         if self.fail_after_create:
             raise GitLabError("simulated crash after the issue was created, before the response arrived")
         return {"iid": iid, "url": url}
@@ -48,10 +50,17 @@ class DryRunGitLab:
     def get_labels(self, iid: int) -> list[str]:
         return list(self.issues[iid]["labels"])
 
-    def update_labels(self, iid: int, add: list[str] = (), remove: list[str] = ()) -> None:
+    def update_labels(self, iid: int, add: list[str] = (), remove: list[str] = (), user: str | None = None) -> None:
+        """`user` stands in for the GitLab account making the change (tests use it to play the approvers)."""
         with self._lock:
-            labels = [label for label in self.issues[iid]["labels"] if label not in remove]
-            self.issues[iid]["labels"] = labels + [label for label in add if label not in labels]
+            issue = self.issues[iid]
+            labels = [label for label in issue["labels"] if label not in remove]
+            issue["labels"] = labels + [label for label in add if label not in labels]
+            issue["label_events"] += [(label, "remove", user or self.user) for label in remove]
+            issue["label_events"] += [(label, "add", user or self.user) for label in add]
+
+    def label_adders(self, iid: int) -> dict[str, str]:
+        return _latest_adders(self.issues[iid]["label_events"])
 
     def close_issue(self, iid: int) -> None:
         self.issues[iid]["state"] = "closed"
@@ -91,10 +100,27 @@ class GitLabClient:
         issue.labels = labels + [label for label in add if label not in labels]
         issue.save()
 
+    def label_adders(self, iid: int) -> dict[str, str]:
+        """From the issue's label history (GitLab resource label events), in the order they happened."""
+        events = self._project.issues.get(iid, lazy=True).resourcelabelevents.list(get_all=True)
+        return _latest_adders([((e.label or {}).get("name"), e.action, (e.user or {}).get("username"))
+                               for e in sorted(events, key=lambda e: e.id)])
+
     def close_issue(self, iid: int) -> None:
         issue = self._project.issues.get(iid)
         issue.state_event = "close"
         issue.save()
+
+
+def _latest_adders(events: list[tuple[str, str, str]]) -> dict[str, str]:
+    """Label name -> username of whoever added it most recently, for labels still on the issue."""
+    adders = {}
+    for label, action, user in events:
+        if action == "add":
+            adders[label] = user
+        else:
+            adders.pop(label, None)
+    return adders
 
 
 _client = None

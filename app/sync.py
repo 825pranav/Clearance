@@ -14,7 +14,8 @@ from app import config, db, gitlab_client
 log = logging.getLogger("clearance.sync")
 POLL_SECONDS = 30
 STUCK_FILING_SECONDS = 60
-LABEL_EVENTS = (("approved::manager", "manager_approved"), ("approved::owner", "owner_approved"))
+# (label, event, approver slot whose GitLab user must have added the label)
+LABEL_EVENTS = (("approved::manager", "manager_approved", "manager"), ("approved::owner", "owner_approved", "owner"))
 STATUS_MESSAGES = {
     "partially_approved": "One of the two approvals is in; still waiting on the other.",
     "approved": "It's fully approved. The system owner will now provision your access.",
@@ -23,11 +24,32 @@ STATUS_MESSAGES = {
 }
 
 
-def events_from_labels(labels: list[str]) -> list[str]:
-    """A rejection wins over any approvals present at the same time."""
+def verified_events(labels: list[str], adders: dict[str, str], usernames: dict[str, str | None]) -> tuple[list[str], list[str]]:
+    """Turn issue labels into lifecycle events, counting a label only if the right person added it.
+
+    `adders` maps each label to the GitLab user who added it (from the issue's label history) and `usernames`
+    maps each approver slot to that approver's GitLab username. `approved::manager` counts only if the
+    manager's account added it, `approved::owner` only if the owner's, and `rejected` if any approver did.
+    A rejection wins over approvals seen in the same poll. Returns (events, labels ignored as unverified).
+    """
+    def added_by(label: str, slots) -> bool:
+        allowed = {usernames.get(slot) for slot in slots} - {None}
+        return adders.get(label) in allowed
+
+    ignored = []
     if "rejected" in labels:
-        return ["rejected"]
-    return [event for label, event in LABEL_EVENTS if label in labels]
+        if added_by("rejected", usernames):
+            return ["rejected"], []
+        ignored.append("rejected")
+    events = []
+    for label, event, slot in LABEL_EVENTS:
+        if label not in labels:
+            continue
+        if added_by(label, [slot]):
+            events.append(event)
+        else:
+            ignored.append(label)
+    return events, ignored
 
 
 def reconcile(gl, older_than_seconds: int = STUCK_FILING_SECONDS) -> list[int]:
@@ -51,11 +73,17 @@ def sync_once(gl, notify=None) -> list[dict]:
     for row in db.requests_with_status(("pending", "partially_approved")):
         try:
             labels = gl.get_labels(row["gitlab_issue_iid"])
+            adders = gl.label_adders(row["gitlab_issue_iid"])
         except Exception:
             log.exception("could not read labels for request %s", row["id"])
             continue
+        usernames = db.approver_gitlab_usernames(row["approvers"])
+        events, ignored = verified_events(labels, adders, usernames)
+        for label in ignored:  # recorded once, not on every poll
+            db.audit_once("label_ignored", "sync", {"label": label, "added_by": adders.get(label),
+                                                     "expected": usernames}, request_id=row["id"])
         old_status, new_status = row["status"], row["status"]
-        for event in events_from_labels(labels):
+        for event in events:
             new_status = db.advance(row["id"], event, actor="sync").status
         if new_status == old_status:
             continue

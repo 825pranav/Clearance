@@ -153,6 +153,22 @@ def audit(event: str, actor: str, detail: dict | None = None, conversation_id: s
         )
 
 
+def approver_gitlab_usernames(approvers: list[dict]) -> dict[str, str | None]:
+    """Approver slot -> that approver's GitLab username (None if not mapped, so their labels never count)."""
+    with connect() as conn:
+        return {a["role"]: (conn.execute("SELECT gitlab_username FROM employees WHERE email = %s", (a["email"],))
+                            .fetchone() or {}).get("gitlab_username") for a in approvers}
+
+
+def audit_once(event: str, actor: str, detail: dict, request_id: int) -> None:
+    """Like audit(), but skips an identical row that already exists (the sync job sees the same labels every poll)."""
+    with connect() as conn:
+        exists = conn.execute("SELECT 1 FROM audit_log WHERE request_id = %s AND event = %s AND detail = %s",
+                              (request_id, event, Jsonb(detail))).fetchone()
+    if not exists:
+        audit(event, actor, detail, request_id=request_id)
+
+
 # ---------------------------------------------------------------- dashboard
 
 
@@ -175,6 +191,13 @@ if __name__ == "__main__":
     command = sys.argv[1] if len(sys.argv) > 1 else "ping"
     if command == "ping":
         print("ok" if ping() else "failed")
+    elif command == "map-approvers":
+        # Demo helper: let one GitLab account act for every manager and system owner.
+        with connect() as conn:
+            updated = conn.execute(
+                """UPDATE employees SET gitlab_username = %s WHERE email IN
+                   (SELECT manager_email FROM employees UNION SELECT owner_email FROM systems)""", (sys.argv[2],)).rowcount
+        print(f"{updated} approvers now map to GitLab user {sys.argv[2]}")
     elif command == "seed":
         ensure_database(config.DATABASE_URL)
         reset()

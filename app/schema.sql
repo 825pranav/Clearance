@@ -8,7 +8,8 @@ CREATE TABLE employees (
     role           TEXT NOT NULL,
     department     TEXT NOT NULL,
     manager_email  TEXT REFERENCES employees(email) DEFERRABLE INITIALLY DEFERRED,
-    slack_user_id  TEXT UNIQUE
+    slack_user_id  TEXT UNIQUE,
+    gitlab_username TEXT          -- the GitLab account whose labels count as this person's approvals
 );
 
 CREATE TABLE systems (
