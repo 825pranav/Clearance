@@ -39,7 +39,7 @@ This is enforced by the tool interfaces, not by the prompt:
         |                                        create_access_request  -> policy + db + app/gitlab_client.py
         |
         +-- background thread: app/sync.py, every 30 s
-              reconcile() stuck filings; read approval labels -> policy.transition() -> db.advance()
+              reconcile() stuck filings; approval labels, only if added by that approver -> policy.transition() -> db.advance()
               swap status:: label, DM the requester
 
  dashboard/app.py (Streamlit): counts, request table, audit trail, eval scores
@@ -116,7 +116,7 @@ Safety invariants checked on every case: risk tier matches `effective_risk`, app
 
 ## Known limitations
 
-- **Approvals are labels, and anyone with project access can add one.** In this mock, `approved::owner` added by anyone counts as the owner's approval. A real version would check who added the label (GitLab's resource label events API) against the approver recorded on the request.
+- **Approvals are labels, so they must come from the right person.** The first version counted an `approved::owner` label whoever added it. That gap is now closed: the sync job reads GitLab's label history and only counts a label added by that slot's approver (see threat T9 in `docs/DESIGN.md`). Approvers' GitLab usernames are kept by hand in `employees.gitlab_username`; a real deployment would sync them from the identity provider.
 - The local 7B model is the weak link. It misses 3 of 30 cases (it doesn't retry after a missing-argument error, claims a filing it didn't make, and over-refuses a mixed legitimate/illegitimate message). In one adversarial case it filed a request after an impersonation story (under the real user's identity, so no harm), and in another it repeated a poisoned handbook instruction to the user. Code keeps every invariant intact, but the wording of replies is only as good as the model.
 - The "fooled" detector and the reply check are pattern-based. They catch the false claims seen during the build, not every possible phrasing.
 - In dry-run mode the GitLab issues live in the memory of the MCP tool-server process, so the separate sync process cannot see them. The approval flow is tested in-process, and live approval needs real GitLab.

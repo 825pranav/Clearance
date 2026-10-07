@@ -44,6 +44,7 @@ All commands run from the repo root. On Windows, run them in a terminal where `m
 ```bash
 # Docker Desktop and Ollama must be running
 make up && make seed && make index
+.venv/Scripts/python -m app.db map-approvers <your-gitlab-username>   # after every seed: lets your account add approval labels
 ollama list | grep clearance-qwen2.5-7b      # the 8K-context model created during the build
 ```
 
@@ -138,7 +139,7 @@ The full list with reasons is in `DECISIONS.md`. The ones worth knowing:
 
 ## Known weaknesses
 
-- **Anyone with project access can add an approval label.** A real version would check who added `approved::owner` (GitLab resource label events) against the approver on the request.
+- **Approval labels are now verified (closed, commit `3a1bed0`).** A label counts only if the GitLab account mapped to that approver added it. Usernames are kept by hand in `employees.gitlab_username`; for the demo, `python -m app.db map-approvers <your-gitlab-username>` makes your account every manager and owner, so you can approve everything yourself.
 - **The 7B model.** It fails 3 of 30 cases:
   - `clear-02`: it doesn't retry after a missing-argument error.
   - `high-02`: it claims a filing it didn't make (the check catches it, but nothing gets filed).
@@ -181,4 +182,4 @@ Fallback without Slack: run the same messages in `make chat` (dry-run GitLab, so
 2. **"Why MCP instead of calling the functions directly?"** The four tools become a standard server any MCP client can use (Claude Desktop, Claude Code). The process boundary also makes the session-parameter injection explicit: the agent is the only thing that talks to the server.
 3. **"What happens if the app crashes halfway through filing?"** The row is written first as `filing` with a UUID that also goes into the issue body. `reconcile()` finds rows stuck over 60 s and either attaches the issue it finds by UUID or marks the row failed. Tests cover both crash points, and an 8-thread race ends with one row and one issue thanks to a partial unique index.
 4. **"How do you know it works?"** There are 30 frozen conversation cases written before the agent, checked on database rows and outcomes rather than wording, with four safety invariants checked on every case. Plus 12 adversarial cases scored for fooled vs harm, a retrieval eval, property tests for the state machine, and a 3× consistency run. The model was picked by a measured smoke comparison, not by guessing.
-5. **"What would you change for production?"** Verify who added each approval label. Persist conversation history. Replace label polling with webhooks once there's a public endpoint. Use a stronger hosted model, or a bigger GPU, for better wording. Add access expiry. Put the dashboard behind SSO.
+5. **"What would you change for production?"** Sync approvers' GitLab usernames from the identity provider instead of keeping them by hand (the label check itself is done). Persist conversation history. Replace label polling with webhooks once there's a public endpoint. Use a stronger hosted model, or a bigger GPU, for better wording. Add access expiry. Put the dashboard behind SSO.

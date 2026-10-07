@@ -51,7 +51,7 @@ flowchart LR
 5. The model asks why. Alex answers in the thread and the model calls the tool again with Alex's words.
 6. Filing is crash-safe. The row is inserted as `filing` with a UUID, the GitLab issue is created with the UUID hidden in an HTML comment, then the two are linked and the row moves to `pending`.
 7. The reply is checked against the tool results. A claimed filing, link, access grant or handbook file must appear in what the tools returned.
-8. Approvers add `approved::manager` and `approved::owner` labels. The sync job turns them into events, applies `policy.transition`, swaps the `status::` label and DMs Alex.
+8. Approvers add `approved::manager` and `approved::owner` labels. The sync job checks who added each one (it must be that slot's approver), turns the verified ones into events, applies `policy.transition`, swaps the `status::` label and DMs Alex.
 
 ### Request lifecycle
 
@@ -86,7 +86,7 @@ stateDiagram-v2
 | T6 | Skipping the existence check | Model calls `create_access_request` directly | `create_access_request` re-runs the check itself, before the justification check | Enforced in code |
 | T7 | Duplicate or racing requests | Two clicks, or two threads at once | One open request per employee per system; partial unique index in Postgres | Enforced. 8-thread race test leaves 1 row, 1 issue |
 | T8 | Crash between database and GitLab | Process dies after creating the issue | Idempotency key in the row and in the issue body; `reconcile()` attaches or fails stuck rows | Enforced. Tests for both crash points |
-| T9 | Forged approval labels | Anyone with project access adds `approved::owner` | **None in this version** | **Open.** A real deployment must check who added the label (GitLab resource label events) against the approver on the request |
+| T9 | Forged approval labels | Anyone with project access adds `approved::owner` | `sync.verified_events` reads the issue's label history (GitLab resource label events) and counts a label only if it was added by the GitLab account of the approver in that slot; `rejected` must come from one of the request's approvers. Unmapped approvers' labels never count, and every ignored label is written once to the audit log | **Found, documented, then closed.** Listed as open in the first version of this doc; fixed in commit `3a1bed0` and covered by unit tests in `tests/test_sync.py` (forged label, wrong slot, requester approving themselves, non-approver rejection, unmapped approver). Checked against real GitLab |
 | T10 | Identity fallback misuse | `DEMO_EMPLOYEE_EMAIL` maps unknown Slack users to one employee | Demo-only setting; leave it unset in a real workspace | Configuration risk |
 | T11 | Secret leakage | Tokens in `.env` | `.env` is git-ignored; tokens are only read from the environment | Operational |
 
@@ -135,7 +135,7 @@ The design aims to make safety independent of model strength: the same invariant
 
 ## Known limitations and next steps
 
-- Verify who added each approval label (T9). This is the most important gap.
+- ~~Verify who added each approval label (T9).~~ Done in `3a1bed0`. What remains: approvers' GitLab usernames are maintained by hand in `employees.gitlab_username`; a real deployment would sync them from the identity provider.
 - Persist conversation history; it is in memory and lost on restart.
 - Replace 30-second label polling with GitLab webhooks once a public endpoint exists.
 - Let the agent retry automatically once after a missing-argument error (`clear-02`).

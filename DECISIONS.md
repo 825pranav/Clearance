@@ -84,3 +84,10 @@ All runs: the 5 smoke cases, same prompt and tools, Ollama on an RTX 4050 Laptop
 - Within a tool loop, Claude's complete previous response (thinking blocks included) is replayed unchanged, which the API requires; history from earlier turns keeps only the text, as with every other model.
 - No temperature (not accepted by current Claude models), so Claude runs are not guaranteed deterministic the way the local temperature-0 runs were. Effort is `medium`. Refusal fallback is on (`fallbacks: "default"`), and a final refusal becomes a polite fixed reply.
 - `python evals/run_evals.py --model <name>` stores results under `by_model.<name>` in `results.json`, so a comparison run never overwrites the primary (local model) numbers that the README quotes.
+
+## Approval label verification
+
+- A label counts only if the most recent `add` event for it was by the approver's GitLab account. Removing a forged label and re-adding it as the real approver therefore works.
+- `rejected` counts if any of the request's approvers added it, since either approver should be able to stop a request.
+- `employees.gitlab_username` is not unique: in a demo, one account plays every approver (`python -m app.db map-approvers <username>`).
+- Covered by unit tests, not a 13th adversarial case, so the frozen eval sets and the resume numbers stay unchanged.

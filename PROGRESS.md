@@ -164,3 +164,10 @@ Answered in `HANDOFF.md` under "D1, D2, D3 in two sentences each".
 - `python -m app.gitlab_client` → `created .../work_items/1, found again: True, closed` (the phase 4 real-issue smoke test).
 - End-to-end against real GitLab (project 87328548): `create_access_request` filed AWS Production read for Alex Chen (high risk, Priya Nair + Devon Price) with labels `access-request`, `risk::high`, `status::pending`; `find_issue` found it by its hidden key; adding `approved::manager` and then `approved::owner` moved it `pending → partially_approved → approved` through `sync_once`, swapped the `status::` label and produced two notifications. Test issues closed afterwards.
 - GitLab now shows issues under `/-/work_items/<iid>` URLs; the client uses whatever `web_url` GitLab returns, so this needed no change.
+
+## Approval label verification
+
+- Closed threat T9 (forged approval labels), which the first design doc listed as open. `sync.verified_events` reads who added each label (GitLab resource label events, via `label_adders`) and counts `approved::manager` / `approved::owner` only when added by that slot's approver's GitLab account (`employees.gitlab_username`), and `rejected` only from one of the request's approvers. Ignored labels go to the audit log once.
+- Tests: `tests/test_sync.py` → 16 passed (forged label, wrong slot, requester approving themselves, rejection by a non-approver, unmapped approver, audit-once, forged label replaced by the real approver). Full suite: 126 passed.
+- Real GitLab: label history on a test issue returned the token owner (`pranavnegi1`) as the adder; issue closed.
+- The frozen eval sets were not touched, and the eval code path (agent, tools, MCP server, runner) does not import `sync.py`, so the eval numbers are unaffected. Commit `3a1bed0`.
