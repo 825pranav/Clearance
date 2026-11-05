@@ -17,5 +17,51 @@ services:
       timeout: 3s
       retries: 30
 
+  # The services below start only with `--profile console` (make console-up), so `make up` stays Postgres only.
+
+  # Runs once and exits. It holds the owner's login so that the long-running console service never has to.
+  console-init:
+    profiles: [console]
+    build: &console-build
+      context: .
+      dockerfile: deploy/Dockerfile
+      target: console
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/clearance
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY in .env}
+      CONSOLE_DB_PASSWORD: ${CONSOLE_DB_PASSWORD:?set CONSOLE_DB_PASSWORD in .env}
+    command: sh -c "python manage.py migrate --noinput && python manage.py setup_roles && python -m app.db console-role"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  console:
+    profiles: [console]
+    build: *console-build
+    environment:
+      CONSOLE_DATABASE_URL: postgresql://clearance_console:${CONSOLE_DB_PASSWORD:?set CONSOLE_DB_PASSWORD in .env}@postgres:5432/clearance
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY in .env}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost}
+    restart: unless-stopped
+    depends_on:
+      console-init:
+        condition: service_completed_successfully
+
+  nginx:
+    profiles: [console]
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      target: nginx
+    ports:
+      # Local machine only by default. Set CONSOLE_BIND=0.0.0.0 to serve other machines.
+      - "${CONSOLE_BIND:-127.0.0.1}:80:80"
+      - "${CONSOLE_BIND:-127.0.0.1}:443:443"
+    volumes:
+      - ./deploy/certs:/etc/nginx/certs:ro
+    restart: unless-stopped
+    depends_on:
+      - console
+
 volumes:
   pgdata:

@@ -101,6 +101,20 @@ The console can also use its own limited database login, `clearance_console` (`a
 
 Add people under Users, tick **Staff status**, and put them in a group. `slack_user_id` and `gitlab_username` are superuser-only because they decide who someone is to Slack and to the approval check.
 
+### Running the console like production
+
+`make console` is Django's development server. For real use, the stack is browser -> Nginx (HTTPS, static files) -> uWSGI (2 workers) -> Django -> Postgres, using the limited login.
+
+```bash
+# .env needs DJANGO_SECRET_KEY and CONSOLE_DB_PASSWORD (see .env.example)
+make up && make seed
+make console-cert     # self-signed certificate for local use; your browser will warn about it
+make console-up       # builds both images; migrations and the database login run in a one-off container
+docker compose exec console python manage.py createsuperuser
+```
+
+Then open https://localhost. Both ports are bound to the local machine unless `CONSOLE_BIND` says otherwise, and hostnames other than `localhost` need `DJANGO_ALLOWED_HOSTS`. `manage.py check --deploy` still warns about HSTS and `SECURE_SSL_REDIRECT`: Nginx does the redirect, and HSTS should wait for a real certificate, because browsers remember it. The comments in `deploy/uwsgi.ini` and `deploy/nginx.conf` explain each setting.
+
 Other targets: `make eval`, `make eval-smoke`, `make eval-adversarial`, `make slack`, `make sync`, `make dashboard`. Real GitLab and Slack need tokens; see `HANDOFF.md`, "Finish setup".
 
 ## Eval results
@@ -155,6 +169,7 @@ The twelve handbook pages in `data/handbook/` are **mock policies written for th
 app/          config, db, policy, retrieval, gitlab_client, tools, mcp_server, llm, agent, cli, slack_bot, sync
 dashboard/    Streamlit page
 web/          Django project: settings, URLs, WSGI entry point
+deploy/       Dockerfile, uWSGI and Nginx config for the console
 console/      Django app: unmanaged models, admin, overview page, setup_roles command
 data/         handbook pages and seed.sql
 evals/        cases.yaml, adversarial.yaml, retrieval_cases.yaml, models.yaml, run_evals.py, results.json/.md

@@ -1,0 +1,5 @@
+# Only what the console needs at runtime, so its image leaves out the LLM, Slack and embedding packages.
+Django>=5.2,<5.3
+psycopg[binary]>=3.2
+python-dotenv>=1.0
+pyuwsgi>=2.0.30

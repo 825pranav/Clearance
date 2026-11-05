@@ -83,3 +83,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Outside local work the console is served over HTTPS, so its cookies must never travel over plain HTTP.
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
+# Nginx handles HTTPS and tells Django through this header. deploy/nginx.conf always overwrites it, so a visitor
+# cannot fake it. Trust it only behind that proxy.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

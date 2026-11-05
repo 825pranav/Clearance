@@ -104,4 +104,8 @@ All runs: the 5 smoke cases, same prompt and tools, Ollama on an RTX 4050 Laptop
 - Tests use the project's existing `_test` database and `seeded` fixture rather than Django's test runner, which would not create unmanaged tables.
 - The console has its own database login. Read-only rules in Django can be skipped by a bug or by `QuerySet.update()`, so `app/console_grants.sql` makes Postgres enforce them: SELECT on requests, SELECT and INSERT on the audit log, and column-level UPDATE on the catalogue that leaves out primary keys.
 - `db.reset()` reapplies these grants, because dropping a table drops its grants too.
+- uWSGI rather than Gunicorn, because the console is plain WSGI and Nginx can speak uwsgi's binary protocol directly. It uses the `pyuwsgi` wheel so the image needs no compiler.
+- The owner's database login exists only in the one-off `console-init` container. The long-running console has only the limited login.
+- Nginx resolves `console` per request. With a fixed name it crashed if it started before uWSGI, which is the likely order after a reboot.
+- Nginx is built from the same Dockerfile and copies the static files in at build time, so a shared volume cannot serve old files after an upgrade.
 

@@ -9,7 +9,7 @@ endif
 MODEL ?=
 MODEL_ARG = $(if $(MODEL),--model $(MODEL),)
 
-.PHONY: up down seed index test eval eval-smoke eval-adversarial chat slack sync dashboard console-setup console-role console
+.PHONY: up down seed index test eval eval-smoke eval-adversarial chat slack sync dashboard console-setup console-role console console-cert console-up console-down
 
 up:
 	docker compose up -d --wait
@@ -56,3 +56,13 @@ console-role:
 
 console:
 	$(PY) manage.py runserver
+
+console-cert:
+	mkdir -p deploy/certs
+	openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost" -keyout deploy/certs/console.key -out deploy/certs/console.crt
+
+console-up:
+	docker compose --profile console up -d --build
+
+console-down:
+	docker compose --profile console down

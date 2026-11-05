@@ -1,0 +1,10 @@
+*
+!app/
+!console/
+!web/
+!manage.py
+!requirements-console.txt
+!evals/results.json
+!deploy/uwsgi.ini
+!deploy/nginx.conf
+**/__pycache__
