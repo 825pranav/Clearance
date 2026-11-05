@@ -6,6 +6,7 @@ One short-lived connection per call keeps this simple; nothing here is hot enoug
 import sys
 
 import psycopg
+from psycopg import sql
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
@@ -13,6 +14,7 @@ from app import config, policy
 
 SCHEMA = config.ROOT / "app" / "schema.sql"
 SEED = config.ROOT / "data" / "seed.sql"
+CONSOLE_GRANTS = config.ROOT / "app" / "console_grants.sql"
 
 
 def connect(url: str | None = None) -> psycopg.Connection:
@@ -40,6 +42,16 @@ def reset() -> None:
     with connect() as conn:
         conn.execute(SCHEMA.read_text(encoding="utf-8"))
         conn.execute(SEED.read_text(encoding="utf-8"))
+        conn.execute(CONSOLE_GRANTS.read_text(encoding="utf-8"))
+
+
+def setup_console_role(password: str) -> None:
+    """Give the console its own login, limited by console_grants.sql. Run after `manage.py migrate`."""
+    with connect() as conn:
+        if conn.execute("SELECT to_regclass('public.requests') AS found").fetchone()["found"] is None:
+            sys.exit("The app's tables do not exist yet. Run `make seed` first.")
+        conn.execute(CONSOLE_GRANTS.read_text(encoding="utf-8"))
+        conn.execute(sql.SQL("ALTER ROLE clearance_console LOGIN PASSWORD {}").format(sql.Literal(password)))
 
 
 # ---------------------------------------------------------------- directory and catalogue
@@ -198,6 +210,11 @@ if __name__ == "__main__":
                 """UPDATE employees SET gitlab_username = %s WHERE email IN
                    (SELECT manager_email FROM employees UNION SELECT owner_email FROM systems)""", (sys.argv[2],)).rowcount
         print(f"{updated} approvers now map to GitLab user {sys.argv[2]}")
+    elif command == "console-role":
+        if not config.CONSOLE_DB_PASSWORD:
+            sys.exit("Set CONSOLE_DB_PASSWORD first.")
+        setup_console_role(config.CONSOLE_DB_PASSWORD)
+        print("console role ready")
     elif command == "seed":
         ensure_database(config.DATABASE_URL)
         reset()

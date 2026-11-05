@@ -51,7 +51,8 @@ TEMPLATES = [
 
 # The console shares the app's database: the app's tables are read through unmanaged models, and Django's own
 # auth and session tables sit beside them. db.reset() only drops the app's tables, so logins survive a reseed.
-_db = conninfo_to_dict(config.DATABASE_URL)
+# When running for real it uses the limited clearance_console login. `migrate` needs the owner's DATABASE_URL.
+_db = conninfo_to_dict(config.CONSOLE_DATABASE_URL or config.DATABASE_URL)
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",

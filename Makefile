@@ -9,7 +9,7 @@ endif
 MODEL ?=
 MODEL_ARG = $(if $(MODEL),--model $(MODEL),)
 
-.PHONY: up down seed index test eval eval-smoke eval-adversarial chat slack sync dashboard console-setup console
+.PHONY: up down seed index test eval eval-smoke eval-adversarial chat slack sync dashboard console-setup console-role console
 
 up:
 	docker compose up -d --wait
@@ -50,6 +50,9 @@ dashboard:
 console-setup:
 	$(PY) manage.py migrate
 	$(PY) manage.py setup_roles
+
+console-role:
+	$(PY) -m app.db console-role
 
 console:
 	$(PY) manage.py runserver

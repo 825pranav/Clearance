@@ -5,6 +5,7 @@ import subprocess
 import sys
 
 import django
+import psycopg
 import pytest
 
 django.setup()
@@ -218,6 +219,65 @@ def test_models_match_the_columns_in_schema_sql(seeded, model):
         cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = %s", [model._meta.db_table])
         database = {row[0] for row in cursor.fetchall()}
     assert {field.column for field in model._meta.concrete_fields if field.column} == database
+
+
+# ---------------------------------------------------------------- the database login itself
+
+
+@pytest.fixture
+def as_console(seeded):
+    """Run SQL with exactly the privileges of the console's database login."""
+    call_command("migrate", verbosity=0)
+    with db.connect() as conn:
+        conn.execute(db.CONSOLE_GRANTS.read_text(encoding="utf-8"))
+        conn.execute("SET ROLE clearance_console")
+        yield conn
+        conn.execute("RESET ROLE")
+
+
+@pytest.mark.parametrize("statement", [
+    "UPDATE requests SET status = 'approved'",
+    "INSERT INTO requests (employee_email, system_key, access_level, risk_tier, approvers, status) "
+    "VALUES ('alex.chen@example.com', 'tableau', 'admin', 'low', '[]', 'approved')",
+    "DELETE FROM requests",
+    "UPDATE audit_log SET actor = 'someone else'",
+    "DELETE FROM audit_log",
+    "TRUNCATE audit_log",
+    "UPDATE role_baseline SET access_level = 'admin'",
+    "INSERT INTO employees (email, name, role, department) VALUES ('x@example.com', 'X', 'Y', 'Z')",
+    "DELETE FROM employees",
+    "UPDATE employees SET email = 'x@example.com'",
+    "INSERT INTO systems (key, name, risk_tier, owner_email, handbook_doc) "
+    "VALUES ('x', 'X', 'low', 'alex.chen@example.com', 'x.md')",
+    "DELETE FROM systems",
+    "UPDATE systems SET key = 'x'",
+    "DROP TABLE requests",
+])
+def test_postgres_refuses_what_the_console_must_never_do(as_console, statement):
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        as_console.execute(statement)
+
+
+@pytest.mark.parametrize("statement", [
+    "SELECT count(*) FROM requests",
+    "SELECT count(*) FROM role_baseline",
+    "UPDATE systems SET risk_tier = 'high' WHERE key = 'tableau'",
+    "UPDATE employees SET department = 'Platform' WHERE email = 'alex.chen@example.com'",
+    "INSERT INTO audit_log (actor, event) VALUES ('console:test', 'catalogue_changed')",
+    "SELECT count(*) FROM django_session",
+    "DELETE FROM django_session",
+    "SELECT count(*) FROM auth_user",
+])
+def test_the_console_login_can_still_do_its_job(as_console, statement):
+    as_console.execute(statement)
+
+
+def test_reseeding_restores_the_console_grants(seeded):
+    db.reset()
+    with db.connect() as conn:
+        conn.execute("SET ROLE clearance_console")
+        assert conn.execute("SELECT count(*) AS n FROM systems").fetchone()["n"] == 10
+        conn.execute("RESET ROLE")
 
 
 def test_reseeding_keeps_logins(seeded):

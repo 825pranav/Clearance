@@ -102,4 +102,6 @@ All runs: the 5 smoke cases, same prompt and tools, Ollama on an RTX 4050 Laptop
 - `role_baseline` has a composite primary key, which Django's admin cannot register, so baselines appear read-only on the system page.
 - Django's auth and session tables share the app's database. `db.reset()` drops only the app's tables, so logins survive a reseed.
 - Tests use the project's existing `_test` database and `seeded` fixture rather than Django's test runner, which would not create unmanaged tables.
+- The console has its own database login. Read-only rules in Django can be skipped by a bug or by `QuerySet.update()`, so `app/console_grants.sql` makes Postgres enforce them: SELECT on requests, SELECT and INSERT on the audit log, and column-level UPDATE on the catalogue that leaves out primary keys.
+- `db.reset()` reapplies these grants, because dropping a table drops its grants too.
 

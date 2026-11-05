@@ -31,6 +31,9 @@ SLACK_BOT_TOKEN = _get("SLACK_BOT_TOKEN")
 SLACK_APP_TOKEN = _get("SLACK_APP_TOKEN")
 DEMO_EMPLOYEE_EMAIL = _get("DEMO_EMPLOYEE_EMAIL")
 
+# The console connects with its own limited login when this is set (see app/console_grants.sql).
+CONSOLE_DATABASE_URL = _get("CONSOLE_DATABASE_URL")
+CONSOLE_DB_PASSWORD = _get("CONSOLE_DB_PASSWORD")
 DJANGO_DEBUG = _get("DJANGO_DEBUG", "0") == "1"
 DJANGO_SECRET_KEY = _get("DJANGO_SECRET_KEY")
 DJANGO_ALLOWED_HOSTS = [host.strip() for host in _get("DJANGO_ALLOWED_HOSTS").split(",") if host.strip()]

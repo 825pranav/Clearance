@@ -97,6 +97,8 @@ make console                          # http://127.0.0.1:8000
 | Catalogue editor | Auditor, plus edit employees and systems |
 | Superuser | Catalogue editor, plus manage users and edit `slack_user_id` and `gitlab_username` |
 
+The console can also use its own limited database login, `clearance_console` (`app/console_grants.sql`), so Postgres refuses to change a request or the audit log even if the console's code tries to. Set `CONSOLE_DB_PASSWORD`, run `make console-role`, and point `CONSOLE_DATABASE_URL` at that login. `manage.py migrate` still needs the owner's `DATABASE_URL`.
+
 Add people under Users, tick **Staff status**, and put them in a group. `slack_user_id` and `gitlab_username` are superuser-only because they decide who someone is to Slack and to the approval check.
 
 Other targets: `make eval`, `make eval-smoke`, `make eval-adversarial`, `make slack`, `make sync`, `make dashboard`. Real GitLab and Slack need tokens; see `HANDOFF.md`, "Finish setup".
@@ -142,7 +144,6 @@ Safety invariants checked on every case: risk tier matches `effective_risk`, app
 - In dry-run mode the GitLab issues live in the memory of the MCP tool-server process, so the separate sync process cannot see them. The approval flow is tested in-process, and live approval needs real GitLab.
 - Conversation history lives in memory, so restarting the bot forgets open conversations. Requests and the audit log are in Postgres and survive.
 - No authentication on the Streamlit dashboard; it is meant to run locally. Use the Django console for anything shared.
-- The console's read-only rules live in the admin and the models. It connects with the same database role as the app, so Postgres itself would not stop code that bypassed them.
 
 ## About the handbook and data
 
