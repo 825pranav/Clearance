@@ -91,3 +91,15 @@ All runs: the 5 smoke cases, same prompt and tools, Ollama on an RTX 4050 Laptop
 - `rejected` counts if any of the request's approvers added it, since either approver should be able to stop a request.
 - `employees.gitlab_username` is not unique: in a demo, one account plays every approver (`python -m app.db map-approvers <username>`).
 - Covered by unit tests, not a 13th adversarial case, so the frozen eval sets and the resume numbers stay unchanged.
+
+## Django console
+
+- Added beside the Streamlit page, not in place of it, so the existing dashboard and its tests are unchanged.
+- **No approve button.** An approval counts only if GitLab's label history shows the approver's account added it. A console action would be a second path without that check, and would leave the issue's labels stale, so requests and the audit log are read-only for everyone.
+- `schema.sql` stays the source of truth. All models are `managed = False`, and a test compares their columns with the live tables. Choices come from `policy.py`.
+- Catalogue rows can be edited but not added or deleted. Each edit writes `catalogue_changed` to `audit_log` in the same transaction, with actor `console:<username>`.
+- `slack_user_id` and `gitlab_username` are superuser-only: they are identity, so setting your own GitLab account on an approver would make your labels count as theirs.
+- `role_baseline` has a composite primary key, which Django's admin cannot register, so baselines appear read-only on the system page.
+- Django's auth and session tables share the app's database. `db.reset()` drops only the app's tables, so logins survive a reseed.
+- Tests use the project's existing `_test` database and `seeded` fixture rather than Django's test runner, which would not create unmanaged tables.
+

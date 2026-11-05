@@ -1,0 +1,60 @@
+{% extends "admin/base_site.html" %}
+
+{% block extrastyle %}{{ block.super }}
+<style>
+  .counts { display: flex; gap: 3rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .counts > div { flex: 1 1 18rem; }
+  .bar { background: var(--primary); height: .6rem; min-width: 1px; }
+  td.bar-cell { width: 60%; vertical-align: middle; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="counts">
+  <div>
+    <h2>By status</h2>
+    <table style="width:100%">
+      {% for row in by_status %}<tr><td>{{ row.label }}</td><td>{{ row.count }}</td><td class="bar-cell"><div class="bar" style="width:{{ row.percent }}%"></div></td></tr>{% endfor %}
+    </table>
+  </div>
+  <div>
+    <h2>By risk tier</h2>
+    <table style="width:100%">
+      {% for row in by_risk %}<tr><td>{{ row.label }}</td><td>{{ row.count }}</td><td class="bar-cell"><div class="bar" style="width:{{ row.percent }}%"></div></td></tr>{% endfor %}
+    </table>
+  </div>
+</div>
+
+<h2>Waiting longest</h2>
+{% if waiting %}
+<table style="width:100%">
+  <thead><tr><th>Request</th><th>Employee</th><th>System</th><th>Level</th><th>Risk</th><th>Status</th><th>Waiting</th></tr></thead>
+  <tbody>
+    {% for r in waiting %}
+    <tr><td><a href="{% url 'admin:console_request_change' r.id %}">#{{ r.id }}</a></td><td>{{ r.employee }}</td><td>{{ r.system }}</td><td>{{ r.access_level }}</td><td>{{ r.risk_tier }}</td><td>{{ r.get_status_display }}</td><td>{{ r.created_at|timesince }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}<p>No open requests.</p>{% endif %}
+
+<h2 style="margin-top:1.5rem">Most recent</h2>
+{% if recent %}
+<table style="width:100%">
+  <thead><tr><th>Request</th><th>Filed</th><th>Employee</th><th>System</th><th>Level</th><th>Status</th></tr></thead>
+  <tbody>
+    {% for r in recent %}
+    <tr><td><a href="{% url 'admin:console_request_change' r.id %}">#{{ r.id }}</a></td><td>{{ r.created_at|date:"Y-m-d H:i" }}</td><td>{{ r.employee }}</td><td>{{ r.system }}</td><td>{{ r.access_level }}</td><td>{{ r.get_status_display }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}<p>No requests yet.</p>{% endif %}
+
+<h2 style="margin-top:1.5rem">Latest eval scores</h2>
+{% if evals %}
+<ul>
+  {% if evals.main %}<li>Main suite ({{ evals.main.model }}): {{ evals.main.passed }}/{{ evals.main.total }}, {{ evals.main.safety_violations }} safety violations</li>{% endif %}
+  {% if evals.adversarial %}<li>Adversarial: harm {{ evals.adversarial.harm }}/{{ evals.adversarial.total }}, fooled {{ evals.adversarial.fooled }}/{{ evals.adversarial.total }}</li>{% endif %}
+  {% if evals.retrieval %}<li>Retrieval top-3: {{ evals.retrieval.hits }}/{{ evals.retrieval.total }}</li>{% endif %}
+</ul>
+{% else %}<p>No eval results yet. Run <code>make eval</code>.</p>{% endif %}
+{% endblock %}

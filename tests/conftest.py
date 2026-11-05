@@ -16,6 +16,8 @@ if not _name.endswith("_test"):
     _base = psycopg.conninfo.make_conninfo(_base, dbname=f"{_name}_test")
 os.environ["DATABASE_URL"] = _base
 os.environ["GITLAB_DRY_RUN"] = "1"
+os.environ["DJANGO_DEBUG"] = "1"
+os.environ["DJANGO_SETTINGS_MODULE"] = "web.settings"
 
 import pytest  # noqa: E402
 

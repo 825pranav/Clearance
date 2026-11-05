@@ -42,7 +42,8 @@ This is enforced by the tool interfaces, not by the prompt:
               reconcile() stuck filings; approval labels, only if added by that approver -> policy.transition() -> db.advance()
               swap status:: label, DM the requester
 
- dashboard/app.py (Streamlit): counts, request table, audit trail, eval scores
+ dashboard/app.py (Streamlit): counts, request table, audit trail, eval scores; local use, no login
+ console/ (Django): login, roles, read-only requests and audit log, audited catalogue edits
 ```
 
 **Request lifecycle** (`policy.transition`, the only way a status changes):
@@ -67,7 +68,7 @@ cp .env.example .env                      # then fill in the LLM_* values
 make up        # Postgres in Docker
 make seed      # schema + mock employees, systems and baselines
 make index     # embed the handbook (downloads a ~67 MB model on first run)
-make test      # unit, property, crash, race, MCP, Slack and dashboard tests; no network, no LLM
+make test      # unit, property, crash, race, MCP, Slack, dashboard and console tests; no network, no LLM
 make chat      # talk to the agent in the terminal (dry-run GitLab by default)
 ```
 
@@ -78,6 +79,25 @@ ollama pull qwen2.5:7b
 printf 'FROM qwen2.5:7b\nPARAMETER num_ctx 8192\n' > Modelfile && ollama create clearance-qwen2.5-7b -f Modelfile
 # .env: LLM_BASE_URL=http://localhost:11434/v1  LLM_API_KEY=ollama  LLM_MODEL=clearance-qwen2.5-7b
 ```
+
+### Access console (Django)
+
+A login-protected admin over the same Postgres database. Requests and the audit log are read-only for everyone, superusers included: a status changes only through `db.advance()`, driven by GitLab labels that sync has checked against the approver's account, so an approve button here would be a way around that check. Employees and systems can be edited, and every edit lands in `audit_log`.
+
+```bash
+# .env: DJANGO_DEBUG=1 for local work
+make console-setup                    # Django's tables, plus the Auditor and Catalogue editor groups
+.venv/bin/python manage.py createsuperuser
+make console                          # http://127.0.0.1:8000
+```
+
+| Role | Can do |
+|---|---|
+| Auditor | view requests, the audit log, employees and systems |
+| Catalogue editor | Auditor, plus edit employees and systems |
+| Superuser | Catalogue editor, plus manage users and edit `slack_user_id` and `gitlab_username` |
+
+Add people under Users, tick **Staff status**, and put them in a group. `slack_user_id` and `gitlab_username` are superuser-only because they decide who someone is to Slack and to the approval check.
 
 Other targets: `make eval`, `make eval-smoke`, `make eval-adversarial`, `make slack`, `make sync`, `make dashboard`. Real GitLab and Slack need tokens; see `HANDOFF.md`, "Finish setup".
 
@@ -121,7 +141,8 @@ Safety invariants checked on every case: risk tier matches `effective_risk`, app
 - The "fooled" detector and the reply check are pattern-based. They catch the false claims seen during the build, not every possible phrasing.
 - In dry-run mode the GitLab issues live in the memory of the MCP tool-server process, so the separate sync process cannot see them. The approval flow is tested in-process, and live approval needs real GitLab.
 - Conversation history lives in memory, so restarting the bot forgets open conversations. Requests and the audit log are in Postgres and survive.
-- No authentication on the dashboard; it is meant to run locally.
+- No authentication on the Streamlit dashboard; it is meant to run locally. Use the Django console for anything shared.
+- The console's read-only rules live in the admin and the models. It connects with the same database role as the app, so Postgres itself would not stop code that bypassed them.
 
 ## About the handbook and data
 
@@ -132,10 +153,12 @@ The twelve handbook pages in `data/handbook/` are **mock policies written for th
 ```
 app/          config, db, policy, retrieval, gitlab_client, tools, mcp_server, llm, agent, cli, slack_bot, sync
 dashboard/    Streamlit page
+web/          Django project: settings, URLs, WSGI entry point
+console/      Django app: unmanaged models, admin, overview page, setup_roles command
 data/         handbook pages and seed.sql
 evals/        cases.yaml, adversarial.yaml, retrieval_cases.yaml, models.yaml, run_evals.py, results.json/.md
 templates/    GitLab issue template
-tests/        pytest suite: policy, state machine (hypothesis), tools, MCP, crash/race, sync, Slack, dashboard
+tests/        pytest suite: policy, state machine (hypothesis), tools, MCP, crash/race, sync, Slack, dashboard, console
 ```
 
 `SPEC.md` is the original build spec. `PROGRESS.md` logs each phase and its gate, `DECISIONS.md` lists every deviation and judgement call, and `HANDOFF.md` covers what is left to configure.

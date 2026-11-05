@@ -31,6 +31,10 @@ SLACK_BOT_TOKEN = _get("SLACK_BOT_TOKEN")
 SLACK_APP_TOKEN = _get("SLACK_APP_TOKEN")
 DEMO_EMPLOYEE_EMAIL = _get("DEMO_EMPLOYEE_EMAIL")
 
+DJANGO_DEBUG = _get("DJANGO_DEBUG", "0") == "1"
+DJANGO_SECRET_KEY = _get("DJANGO_SECRET_KEY")
+DJANGO_ALLOWED_HOSTS = [host.strip() for host in _get("DJANGO_ALLOWED_HOSTS").split(",") if host.strip()]
+
 HANDBOOK_DIR = ROOT / "data" / "handbook"
 INDEX_DIR = Path(_get("INDEX_DIR", str(ROOT / "data" / "index")))
 TEMPLATE_PATH = ROOT / "templates" / "access_request.md"
